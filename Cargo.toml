@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "four-q",
+    "kangarootwelve64to32",
+    "qubic-tcp-protocol",
+    "qubic-types"
+]
