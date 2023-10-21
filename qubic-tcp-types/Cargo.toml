@@ -1,0 +1,16 @@
+[package]
+name = "qubic-tcp-types"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+getrandom = { version = "*", features = ["js"] }
+serde = { version = "*", features = ["derive"] }
+rand = { version = "*" }
+wbg-rand = "*"
+qubic-types = { path= "../qubic-types", features = ["serde"]}
+
+[features]
+wasm = []

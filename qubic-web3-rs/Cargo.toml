@@ -1,0 +1,22 @@
+[package]
+name = "qubic-web3-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "*"
+kangarootwelve = "0.1.2"
+kangarootwelve64to32 = { path = "../kangarootwelve64to32" }
+tokio = { version = "*", features = ["full"]}
+socket2 = "*"
+anyhow = "*"
+qubic-types = { path = "../qubic-types" }
+serde = { version = "*", features = ["derive"]}
+qubic-tcp-types = { path = "../qubic-tcp-types" }
+async-trait = "*"
+
+[features]
+http = []
+async = ["http"]

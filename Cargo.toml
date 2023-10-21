@@ -1,7 +1,18 @@
 [workspace]
 members = [
-    "four-q",
+    "four-q-rs",
     "kangarootwelve64to32",
-    "qubic-tcp-protocol",
-    "qubic-types"
+    "qubic-web3-rs",
+    "qubic-types",
+    "qubic-tcp-types",
+    "qubic-rpc-types",
+    "qubic-rpc",
+    "vanity-id-generator",
+    "qubic-computor-rs",
 ]
+
+[profile.dev]
+overflow-checks = false
+
+[build]
+rustflags = ["-C target-cpu=native"]

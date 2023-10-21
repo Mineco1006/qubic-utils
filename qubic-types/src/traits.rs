@@ -1,6 +1,3 @@
-use crate::MessageType;
-
-
 pub trait AsByteEncoded where Self: Sized {
     fn encode_as_bytes(&self) -> &[u8] {
         unsafe {
@@ -9,6 +6,4 @@ pub trait AsByteEncoded where Self: Sized {
     }
 }
 
-pub trait GetMessageType {
-    fn get_message_type(&self) -> MessageType; 
-}
+impl<T: Sized> AsByteEncoded for T {}

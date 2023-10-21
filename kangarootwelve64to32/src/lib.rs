@@ -764,5 +764,15 @@ fn test() {
 
     kangarootwelve64to32(&gamming_key_and_nonce, &mut gamming_key);
     let bytes: [u8; 32] = gamming_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
-    assert_eq!(bytes, [0, 32, 249, 137, 140, 96, 24, 28, 70, 109, 27, 240, 57, 166, 254, 183, 39, 66, 155, 151, 239, 64, 79, 133, 110, 95, 135, 139, 184, 226, 214, 92])
+    assert_eq!(bytes, [0, 32, 249, 137, 140, 96, 24, 28, 70, 109, 27, 240, 57, 166, 254, 183, 39, 66, 155, 151, 239, 64, 79, 133, 110, 95, 135, 139, 184, 226, 214, 92]);
+
+    unsafe {
+        let gamming_key_and_nonce = *(gamming_key_and_nonce.as_ptr() as *const [u8; 64]);
+        let mut output = [0u8; 32];
+        let mut kg = kangarootwelve::KangarooTwelve::hash(&gamming_key_and_nonce, &[]);
+        kg.squeeze(&mut output);
+
+        assert_eq!(output, [0, 32, 249, 137, 140, 96, 24, 28, 70, 109, 27, 240, 57, 166, 254, 183, 39, 66, 155, 151, 239, 64, 79, 133, 110, 95, 135, 139, 184, 226, 214, 92]);
+    }
+    
 }

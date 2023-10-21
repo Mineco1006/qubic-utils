@@ -1,10 +1,10 @@
 [package]
-name = "kangarootwelve64to32"
+name = "qubic-computor-rs"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-keccak-p = "*"
-kangarootwelve = "*"
+qubic-types = { path = "../qubic-types" }
+qubic-web3-rs = { path = "../qubic-web3-rs" }

@@ -41,27 +41,29 @@ fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
 
     #[cfg(not(target_arch = "x86_64"))]
     {
-        let im = a.overflowing_add(b);
+        let c_out = a.overflowing_add(b);
+        let c_out1 = c_out.0.overflowing_add(if c_in != 0 { 1 } else { 0 });
         
-        *out = im.0 + if c_in != 0 { 1 } else { 0 };
+        *out = c_out1.0;
 
-        im.1 as u8
+        (c_out.1 || c_out1.1) as u8
     }
 }
 
-fn subborrow_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
+fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        _subborrow_u64(c_in, a, b, out)
+        _subborrow_u64(b_in, a, b, out)
     }
 
     #[cfg(not(target_arch = "x86_64"))]
     {
-        let im = a.overflowing_sub(b + if c_in != 0 { 1 } else { 0 });
+        let b_out = a.overflowing_sub(b);
+        let b_out1 = b_out.0.overflowing_sub(if b_in != 0 { 1 } else { 0 });
 
-        *out = im.0;
+        *out = b_out1.0;
 
-        im.1 as u8
+        (b_out.1 || b_out1.1) as u8
     }
 }
 
