@@ -1,0 +1,21 @@
+[package]
+name = "qubic-rpc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+qubic-types = { path = "../qubic-types" }
+qubic-web3-rs = { path = "../qubic-web3-rs" }
+axum = "*"
+tokio = { version = "*", features = ["full"] }
+serde = { version = "*", features = ["derive"] }
+hex = "*"
+log = "*"
+env_logger = "*"
+qubic-rpc-types = { path="../qubic-rpc-types" }
+tower-http = { version = "*", features = ["cors"]}
+
+[dev-dependencies]
+reqwest = { version= "*", features = ["rustls", "json"]}
