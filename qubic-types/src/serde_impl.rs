@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize, de::Visitor};
 
-use crate::{QubicId, Signature};
+use crate::{QubicId, Signature, Nonce};
 
 
 struct QubicIdVisitor;
@@ -100,5 +100,17 @@ impl Serialize for Signature {
 impl<'de> Deserialize<'de> for Signature {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
         Ok(Signature(deserializer.deserialize_str(HexVisitor)?))
+    }
+}
+
+impl Serialize for Nonce {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+        serializer.collect_str(&format!("0x{}", hex::encode(self.0)))
+    }
+}
+
+impl<'de> Deserialize<'de> for Nonce {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+        Ok(Nonce(deserializer.deserialize_str(HexVisitor)?))
     }
 }

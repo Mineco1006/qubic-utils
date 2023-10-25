@@ -1,4 +1,6 @@
-use qubic_types::{QubicId, Signature};
+use std::net::Ipv4Addr;
+
+use qubic_types::{QubicId, Signature, H256, Nonce};
 
 use crate::{utils::{QubicRequest, QubicReturnType}, Header, MessageType};
 
@@ -61,21 +63,23 @@ pub struct CurrentTickInfo {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct BroadcastMessage {
     pub source_public_key: QubicId,
     pub destination_public_key: QubicId,
-    pub gamming_nonce: [u8; 32],
-    pub solution_nonce: [u8; 32],
+    pub gamming_nonce: Nonce,
+    pub solution_nonce: Nonce,
     pub signature: Signature
 }
 
 set_message_type!(BroadcastMessage, MessageType::BroadcastMessage);
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorkSolution {
     pub public_key: QubicId,
-    pub nonce: [u8; 32],
+    pub nonce: Nonce,
 }
 
 impl Into<BroadcastMessage> for WorkSolution {
@@ -83,8 +87,8 @@ impl Into<BroadcastMessage> for WorkSolution {
         BroadcastMessage {
             source_public_key: self.public_key,
             destination_public_key: QubicId::default(),
-            gamming_nonce: [0; 32],
-            solution_nonce: [0; 32],
+            gamming_nonce: Nonce::default(),
+            solution_nonce: Nonce::default(),
             signature: Signature::default()
         }
     }
@@ -128,6 +132,7 @@ pub struct Computors {
 
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RequestContractIpo {
     pub contract_index: u32
@@ -145,6 +150,7 @@ pub struct ContractIpo {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RequestTickData {
     pub tick: u32
@@ -189,7 +195,7 @@ pub struct TickData {
     pub var_struct: VarStruct,
 
     pub time_lock: [u8; 32],
-    pub transaction_digest: [[u8; 32]; 128],
+    pub transaction_digest: [H256; 128],
     pub contract_fees: [u64; 1024],
 
     pub signature: Signature
@@ -207,7 +213,7 @@ set_message_type!(RequestQuorumTick, MessageType::RequestQuorumTick);
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct ExchangePublicPeers {
-    pub peers: [[u8; 4]; 4]
+    pub peers: [Ipv4Addr; 4]
 }
 
 #[derive(Debug, Clone, Copy)]

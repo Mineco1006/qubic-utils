@@ -7,6 +7,15 @@ pub mod errors;
 mod serde_impl;
 pub mod traits;
 
+pub use ethereum_types::{H256, H512, U256};
+
+
+/// 32 byte nonce type
+#[derive(Clone, Copy, Default)]
+pub struct Nonce(pub [u8; 32]);
+
+
+/// 64 byte SchnorrQ signature type
 #[derive(Clone, Copy)]
 pub struct Signature(pub [u8; 64]);
 

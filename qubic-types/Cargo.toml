@@ -10,6 +10,7 @@ thiserror = "*"
 four-q = { path = "../four-q-rs" }
 kangarootwelve = "0.1.2"
 serde = { version = "*", features = ["derive"]}
+ethereum-types = "0.14.1"
 hex = "*"
 
 [features]

@@ -1,5 +1,3 @@
-use kangarootwelve::KangarooTwelve;
-
 use crate::{QubicId, QubicWallet};
 
 const SEED: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

@@ -6,7 +6,7 @@ use std::{ptr::copy_nonoverlapping, fmt::{Debug, Display}};
 use four_q::{types::PointAffine, ops::{ecc_mul_fixed, encode, decode, ecc_mul, montgomery_multiply_mod_order, ecc_mul_double}, consts::{MONTGOMERY_R_PRIME, ONE, CURVE_ORDER_0, CURVE_ORDER_1, CURVE_ORDER_3, CURVE_ORDER_2}};
 use kangarootwelve::KangarooTwelve;
 
-use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::AsByteEncoded};
+use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::AsByteEncoded, Nonce};
 
 fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
     #[cfg(target_arch = "x86_64")]
@@ -43,6 +43,7 @@ fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
 }
 
 impl QubicId {
+    #[inline]
     pub fn check_id(id: &str) -> Result<(), QubicError> {
         if !id.chars().all(|c| c.is_uppercase() && c.is_ascii_alphabetic()) {
             return Err(QubicError::InvalidIdFormatError { ident: "ID" })
@@ -57,6 +58,7 @@ impl QubicId {
         Ok(())
     }
 
+    #[inline]
     pub fn from_str(id: &str) -> Result<Self, QubicError> {
         let mut buffer = [0u8; 32];
 
@@ -85,7 +87,7 @@ impl QubicId {
         Ok(Self(buffer))
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_identity(&self) -> String {
         let mut identity = [0u8; 60];
         for i in 0..4 {
@@ -109,7 +111,7 @@ impl QubicId {
         String::from_utf8(identity.to_vec()).unwrap()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_identity_bytes(&self) -> [u8; 60] {
         let mut identity = [0u8; 60];
         for i in 0..4 {
@@ -133,6 +135,20 @@ impl QubicId {
         identity
     }
 
+    /// Verifies signature from message
+    /// 
+    /// ```
+    /// use qubic_types::QubicId;
+    /// 
+    /// const SIGNATURE: Signature = Signature([0; 64]);
+    /// 
+    /// let message = "qubic".as_bytes();
+    /// 
+    /// let id = QubicId::from_str("BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
+    /// 
+    /// id.verify(message, SIGNATURE);
+    /// ```
+    #[inline]
     pub fn verify<T: AsByteEncoded>(&self, message: T, signature: Signature) -> bool {
         let mut digest: [u8; 32] = [0; 32];
         let mut kg = KangarooTwelve::hash(message.encode_as_bytes(), &[]);
@@ -142,6 +158,20 @@ impl QubicId {
         self.verify_raw(digest, signature)
     }
 
+    /// Verifies signature from digest
+    /// 
+    /// ```
+    /// use qubic_types::QubicId;
+    /// 
+    /// const SIGNATURE: Signature = Signature([0; 64]);
+    /// 
+    /// let digest = [0; 32]; // use KangarooTwelve to generate digest of your message data
+    /// 
+    /// let id = QubicId::from_str("BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
+    /// 
+    /// id.verify_raw(digest, SIGNATURE);
+    /// ```
+    #[inline]
     pub fn verify_raw(&self, message_digest: [u8; 32], signature: Signature) -> bool {
         let signature = signature.0;
         let public_key = self.0;
@@ -199,6 +229,12 @@ impl Display for QubicId {
 }
 
 impl QubicWallet {
+    /// Generates a wallet from the given input seed
+    /// 
+    /// ```
+    /// use qubic_types::QubicWallet;
+    /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    /// ```
     pub fn from_seed(seed: &str) -> Result<Self, QubicError> {
         let subseed = Self::get_subseed(seed)?;
         let private_key = Self::get_private_key(&subseed);
@@ -237,15 +273,7 @@ impl QubicWallet {
         Ok(subseed)
     }
 
-    #[inline(always)]
-    pub fn get_subseed_unchecked(seed: &[u8]) -> [u8; 32] {
-        let mut subseed = [0u8; 32];
-        let mut kg = kangarootwelve::KangarooTwelve::hash(seed, &[]);
-        kg.squeeze(&mut subseed);
-
-        subseed
-    }
-
+    // Generates the private key from input subseed
     #[inline(always)]
     pub fn get_private_key(subseed: &[u8; 32]) -> [u8; 32] {
         let mut pk = [0u8; 32];
@@ -256,10 +284,6 @@ impl QubicWallet {
     }
 
     /// SchnorrQ public key generation
-    /// It produces a public key publicKey, which is the encoding of P = s*G, where G is the generator and
-    /// s is the output of hashing publicKey and taking the least significant 32 bytes of the result
-    /// Input:  32-byte privateKey
-    /// Output: 32-byte publicKey
     #[inline(always)]
     pub fn get_public_key(private_key: &[u8; 32]) -> [u8; 32] {
         let mut p = PointAffine::default();
@@ -272,6 +296,14 @@ impl QubicWallet {
         private_key
     }
 
+    /// Get the identity of the wallet
+    /// 
+    /// ```
+    /// use qubic_types::QubicWallet;
+    /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    /// 
+    /// assert_eq(wallet.get_identity(), "BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
+    /// ```
     #[inline(always)]
     pub fn get_identity(&self) -> String {
         self.public_key.get_identity()
@@ -309,10 +341,16 @@ impl QubicWallet {
         Ok(shared_key)
     }
 
-    /// SchnorrQ signature generation
-    /// It produces the signature signature of a message messageDigest of size 32 in bytes
-    /// Inputs: 32-byte subseed, 32-byte publicKey, and arbitrarily Sized message
-    /// Output: 64-byte signature
+    /// SchnorrQ signature generation from message
+    /// 
+    /// ```
+    /// use qubic_types::QubicWallet;
+    /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    /// 
+    /// let message = "qubic".as_bytes();
+    /// 
+    /// let signature = wallet.sign(message);
+    /// ```
     pub fn sign<T: AsByteEncoded>(&self, message: T) -> Signature {
         let mut message_digest = [0; 32];
         let mut kg = KangarooTwelve::hash(message.encode_as_bytes(), &[]);
@@ -321,10 +359,16 @@ impl QubicWallet {
         self.sign_raw(message_digest)
     }
 
-    /// SchnorrQ signature generation
-    /// It produces the signature signature of a message messageDigest of size 32 in bytes
-    /// Inputs: 32-byte subseed, 32-byte publicKey, and 32-byte message_digest
-    /// Output: 64-byte signature
+    /// SchnorrQ signature generation from message digest
+    /// 
+    /// ```
+    /// use qubic_types::QubicWallet;
+    /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    /// 
+    /// let digest = [0; 32]; // use KangarooTwelve to generate digest of your message data
+    /// 
+    /// let signature = wallet.sign_raw(digest);
+    /// ```
     pub fn sign_raw(&self, message_digest: [u8; 32]) -> Signature {
         let mut r_a = PointAffine::default();
         let (mut k, mut h, mut temp) = ([0u8; 64], [0u8; 64], [0u8; 96]);
@@ -334,7 +378,6 @@ impl QubicWallet {
 
         let mut signature = [0u8; 64];
 
-        //let mut k = k.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>();
         unsafe {
             copy_nonoverlapping(k.as_ptr().offset(32), temp.as_mut_ptr().offset(32), 32);
             copy_nonoverlapping(message_digest.as_ptr(), temp.as_mut_ptr().offset(64), 32);
@@ -393,6 +436,18 @@ impl Debug for Signature {
 }
 
 impl Display for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("0x{}", hex::encode(&self.0)))
+    }
+}
+
+impl Debug for Nonce {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("0x{}", hex::encode(&self.0)))
+    }
+}
+
+impl Display for Nonce {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("0x{}", hex::encode(&self.0)))
     }

@@ -20,3 +20,4 @@ async-trait = "*"
 [features]
 http = []
 async = ["http"]
+serde = ["qubic-types/serde", "qubic-tcp-types/serde"]
