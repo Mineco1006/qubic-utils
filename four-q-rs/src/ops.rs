@@ -1029,7 +1029,7 @@ pub fn ecc_mul_double(k: &mut [u64], l: &mut [u64], q: &mut PointAffine) -> bool
     t.y[0][0] = 1; t.y[0][1] = 0; t.y[1][0] = 0; t.y[1][1] = 0;
     t.z[0][0] = 1; t.z[0][1] = 0; t.z[1][0] = 0; t.z[1][1] = 0;
 
-    for i in (0..64).rev() {
+    for i in (0..=64).rev() {
         eccdouble(&mut t);
 
         if digits_l1[i] < 0 {
