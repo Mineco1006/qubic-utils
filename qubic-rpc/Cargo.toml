@@ -16,6 +16,7 @@ log = "*"
 env_logger = "*"
 qubic-rpc-types = { path="../qubic-rpc-types" }
 tower-http = { version = "*", features = ["cors"]}
+clap = { version = "4.4.7", features = ["derive"]}
 
 [dev-dependencies]
 reqwest = { version= "*", features = ["rustls", "json"]}

@@ -1,43 +1,62 @@
+use std::sync::Arc;
+
 use axum::{
     routing::post,
+    extract::State,
     Router, Json,
 };
 use qubic_web3_rs::{client::Client, transport::Tcp};
 use qubic_rpc_types::{JsonRpcRequest, JsonRpcResponse, ComputorInfos};
 use axum::http::Method;
 use tower_http::cors::{CorsLayer, Any};
+use clap::Parser;
 
 #[macro_use]
 extern crate log;
 
+#[derive(Debug, Parser)]
+struct Args {
+    /// Binds server to provided port
+    #[arg(short, long, default_value = "2003")]
+    port: String,
+
+    /// Computor to send requests
+    #[arg(short, long, default_value = "84.74.68.177")]
+    computor: String
+}
+
 #[tokio::main]
 async fn main() {
     env_logger::Builder::new().filter_level(log::LevelFilter::Info).init();
+
+    let mut args = Args::parse();
+
+    args.computor.push_str(":21841");
 
     let cors = CorsLayer::new()
                         .allow_methods([Method::POST])
                         .allow_origin(Any)
                         .allow_headers(Any);
 
-    let app = Router::new().route("/", post(request_handler)).layer(cors);
+    let state = Arc::new(args);
 
-    info!("Binding server to port 2003");
-    axum::Server::bind(&"0.0.0.0:2003".parse().unwrap())
+    let app = Router::new().route("/", post(request_handler)).with_state(state.clone()).layer(cors);
+
+    info!("Binding server to port {}", state.port);
+    axum::Server::bind(&format!("0.0.0.0:{}", state.port).parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
 }
 
-const COMPUTOR_IP: &str = "84.74.68.177:21841";
-
-async fn request_handler(Json(rpc_method): Json<JsonRpcRequest>) -> Json<JsonRpcResponse> {
+async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<JsonRpcRequest>) -> Json<JsonRpcResponse> {
     info!("Incoming request: {rpc_method:?}");
     if !rpc_method.is_version_2() {
         let res = rpc_method.init_error(Some("Invalid JSON-RPC version!".to_string()));
         return Json(res);
     }
 
-    let client = Client::<Tcp>::new(COMPUTOR_IP);
+    let client = Client::<Tcp>::new(&state.computor);
 
     match &rpc_method {
         JsonRpcRequest::RequestCurrentTickInfo { jsonrpc: _, id } => {

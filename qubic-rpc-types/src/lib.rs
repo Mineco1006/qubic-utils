@@ -2,23 +2,13 @@ use qubic_tcp_types::types::{CurrentTickInfo, Entity, Transaction};
 use qubic_types::{QubicId, Signature};
 use serde::{Serialize, Deserialize};
 
-mod impls;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TransactionParams {
-    pub from: QubicId,
-    pub to: QubicId,
-    pub amount: u64,
-    pub tick: u32,
-    pub signature: Signature
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "camelCase")]
 pub enum JsonRpcRequest {
     RequestCurrentTickInfo { jsonrpc: String, id: usize },
     /// params: qubic ID
     RequestEntity { jsonrpc: String, id: usize, params: QubicId },
+
     RequestComputors { jsonrpc: String, id: usize },
 
     SendTransaction { jsonrpc: String, id: usize, params: Transaction },
