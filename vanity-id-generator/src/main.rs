@@ -1,7 +1,7 @@
 use std::{time::Instant, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender};
-use qubic_types::{QubicWallet, QubicId};
+use qubic_types::QubicWallet;
 use rand::Rng;
 use structopt::StructOpt;
 
@@ -11,7 +11,7 @@ extern crate log;
 #[derive(Debug, StructOpt)]
 struct Opt {
     
-    #[structopt(short="t")]
+    #[structopt(short="t", long)]
     threads: usize,
 
     #[structopt(short="m", long="match")]
@@ -114,13 +114,4 @@ pub fn get_random_seed() -> String {
     }
 
     String::from_utf8(seed.to_vec()).unwrap()
-}
-
-#[inline(always)]
-pub fn get_identity(seed: &[u8]) -> [u8; 60] {
-    let ss = QubicWallet::get_subseed_unchecked(&seed);
-    let pk = QubicWallet::get_private_key(&ss);
-    let id = QubicId(QubicWallet::get_public_key(&pk));
-
-    id.get_identity_bytes()
 }
