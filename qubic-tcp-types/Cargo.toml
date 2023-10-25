@@ -10,7 +10,8 @@ getrandom = { version = "*", features = ["js"] }
 serde = { version = "*", features = ["derive"] }
 rand = { version = "*" }
 wbg-rand = "*"
-qubic-types = { path= "../qubic-types", features = ["serde"]}
+qubic-types = { path= "../qubic-types" }
 
 [features]
+serde = ["qubic-types/serde"]
 wasm = []

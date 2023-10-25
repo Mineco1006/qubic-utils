@@ -1,5 +1,4 @@
 use qubic_types::{QubicId, Signature};
-use serde::{Deserialize, Serialize};
 
 use crate::{utils::{QubicRequest, QubicReturnType}, Header, MessageType};
 
@@ -21,7 +20,8 @@ macro_rules! set_return_type {
     };
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RawTransaction {
     pub from: QubicId,
@@ -33,7 +33,8 @@ pub struct RawTransaction {
 }
 
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct Transaction {
     pub raw_transaction: RawTransaction,
@@ -48,7 +49,8 @@ pub struct GetCurrentTickInfo;
 set_message_type!(GetCurrentTickInfo, MessageType::RequestCurrentTickInfo);
 set_return_type!(GetCurrentTickInfo, CurrentTickInfo);
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct CurrentTickInfo {
     pub tick_duration: u16,
@@ -89,6 +91,7 @@ impl Into<BroadcastMessage> for WorkSolution {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RequestEntity {
     pub public_key: QubicId
@@ -97,7 +100,8 @@ pub struct RequestEntity {
 set_message_type!(RequestEntity, MessageType::RequestEntity);
 set_return_type!(RequestEntity, Entity);
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Entity {
     pub public_key: QubicId,
     pub incoming_amount: u64,
