@@ -3,12 +3,11 @@ use rand::Rng;
 pub mod types;
 pub mod utils;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum MessageType {
-    BroadcastMessage = 1, // aka SubmitWork?
+    BroadcastMessage = 1,
     
-    // computor
     ExchangePublicPeers = 0,
     BroadcastComputors = 2,
     BroadcastTick = 3,
@@ -35,9 +34,9 @@ pub enum MessageType {
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Header {
-    size: [u8; 3],
-    message_type: MessageType,
-    dejavu: u32,
+    pub size: [u8; 3],
+    pub message_type: MessageType,
+    pub dejavu: u32,
 }
 
 impl Header {
