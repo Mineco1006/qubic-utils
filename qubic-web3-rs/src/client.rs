@@ -1,7 +1,7 @@
-use std::{ptr::copy_nonoverlapping, net::{TcpStream, TcpListener}};
+use std::{ptr::copy_nonoverlapping, net::{TcpStream, TcpListener, Ipv4Addr}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::types::{Transaction, Packet, GetCurrentTickInfo, CurrentTickInfo, WorkSolution, BroadcastMessage, RequestComputors, Computors, Entity, RequestEntity, ContractIpo, RequestContractIpo, TickData, RequestTickData, RequestQuorumTick, RawTransaction};
+use qubic_tcp_types::types::{Transaction, Packet, GetCurrentTickInfo, CurrentTickInfo, WorkSolution, BroadcastMessage, RequestComputors, Computors, Entity, RequestEntity, ContractIpo, RequestContractIpo, TickData, RequestTickData, RequestQuorumTick, RawTransaction, ExchangePublicPeers};
 use anyhow::{Result, Ok};
 use kangarootwelve::KangarooTwelve;
 use qubic_types::{QubicWallet, QubicId};
@@ -104,7 +104,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     pub fn get_current_tick_info(&self) -> Result<CurrentTickInfo> {
         let packet = Packet::new(GetCurrentTickInfo, true);
 
-        Ok(self.transport.send_with_response::<CurrentTickInfo>(packet)?)
+        Ok(self.transport.send_with_response(packet)?)
     }
 
     pub fn request_computors(&self) -> Result<Computors> {
@@ -134,6 +134,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     pub fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<TickData> {
         let packet = Packet::new(RequestQuorumTick { tick, vote_flags }, true);
         
+        Ok(self.transport.send_with_response(packet)?)
+    }
+
+    pub fn exchange_public_peers(&self, peers: [Ipv4Addr; 4]) -> Result<ExchangePublicPeers> {
+        let packet = Packet::new(ExchangePublicPeers { peers }, true);
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
