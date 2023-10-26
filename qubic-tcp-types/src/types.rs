@@ -7,7 +7,7 @@ use crate::{utils::{QubicRequest, QubicReturnType}, Header, MessageType};
 macro_rules! set_message_type {
     ($impl: ident, $message_type: expr) => {
         impl QubicRequest for $impl {
-            fn get_message_type(&self) -> MessageType {
+            fn get_message_type() -> MessageType {
                 $message_type
             }
         }
@@ -61,6 +61,7 @@ pub struct CurrentTickInfo {
     pub number_of_aligned_votes: u16,
     pub number_of_misaligned_votes: u16
 }
+set_message_type!(CurrentTickInfo, MessageType::RespondCurrentTickInfo);
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -72,7 +73,6 @@ pub struct BroadcastMessage {
     pub solution_nonce: Nonce,
     pub signature: Signature
 }
-
 set_message_type!(BroadcastMessage, MessageType::BroadcastMessage);
 
 #[derive(Debug, Clone, Copy)]
@@ -116,6 +116,8 @@ pub struct Entity {
     pub latest_outgoing_transfer_tick: u32
 }
 
+set_message_type!(Entity, MessageType::RespondEntity);
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct RequestComputors;
@@ -130,6 +132,7 @@ pub struct Computors {
     pub signature: Signature
 }
 
+set_message_type!(Computors, MessageType::BroadcastComputors);
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -148,6 +151,8 @@ pub struct ContractIpo {
     pub public_keys: [QubicId; 676],
     pub prices: [u64; 676]
 }
+
+set_message_type!(ContractIpo, MessageType::RespondContractIPO);
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -201,6 +206,8 @@ pub struct TickData {
     pub signature: Signature
 }
 
+set_message_type!(TickData, MessageType::BroadcastTick);
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct RequestQuorumTick {
@@ -216,6 +223,8 @@ pub struct ExchangePublicPeers {
     pub peers: [Ipv4Addr; 4]
 }
 
+set_message_type!(ExchangePublicPeers, MessageType::ExchangePublicPeers);
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Packet<T: Sized> {
@@ -226,7 +235,7 @@ pub struct Packet<T: Sized> {
 impl<T: Sized + QubicRequest> Packet<T> {
     pub fn new(data: T, randomize_dejavu: bool) -> Packet<T> {
         Self {
-            header: Header::new(std::mem::size_of::<Header>() + std::mem::size_of::<T>(), data.get_message_type(), randomize_dejavu),
+            header: Header::new(std::mem::size_of::<Header>() + std::mem::size_of::<T>(), T::get_message_type(), randomize_dejavu),
             data
         }
     }
