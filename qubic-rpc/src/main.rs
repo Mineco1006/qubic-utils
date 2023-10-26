@@ -21,7 +21,7 @@ struct Args {
     port: String,
 
     /// Computor to send requests
-    #[arg(short, long, default_value = "84.74.68.177")]
+    #[arg(short, long, default_value = "144.76.237.194:21842")]
     computor: String
 }
 
@@ -29,9 +29,7 @@ struct Args {
 async fn main() {
     env_logger::Builder::new().filter_level(log::LevelFilter::Info).init();
 
-    let mut args = Args::parse();
-
-    args.computor.push_str(":21841");
+    let args = Args::parse();
 
     let cors = CorsLayer::new()
                         .allow_methods([Method::POST])
