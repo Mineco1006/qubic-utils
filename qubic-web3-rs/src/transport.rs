@@ -86,8 +86,7 @@ impl Transport for Tcp {
 impl Transport for Tcp {
     fn new(url: String) -> Self {
         Self {
-            url,
-            is_connected: false
+            url
         }
     }
 
