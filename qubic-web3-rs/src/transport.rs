@@ -4,7 +4,7 @@ use std::{net::TcpStream, io::{Write, Read}};
 
 use anyhow::Result;
 
-use qubic_tcp_types::Header;
+use qubic_tcp_types::{Header, types::{Packet, ExchangePublicPeers}, MessageType, utils::QubicRequest};
 use qubic_types::traits::AsByteEncoded;
 
 #[cfg(any(feature = "async", feature = "http"))]
@@ -16,7 +16,7 @@ pub trait Transport {
 
     fn send_without_response(&self, data: impl AsByteEncoded) -> Result<()>;
 
-    fn send_with_response<T: Copy>(&self, data: impl AsByteEncoded) -> Result<T>;
+    fn send_with_response<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<T>;
 
     fn is_connected(&self) -> bool;
 }
@@ -28,13 +28,13 @@ pub trait Transport {
 
     async fn send_without_response<B: AsByteEncoded + Send>(&self, data: B) -> Result<()>;
 
-    async fn send_with_response<T: Copy, B: AsByteEncoded + Send>(&self, data: B) -> Result<T>;
+    async fn send_with_response<T: Copy, D: QubicRequest + Send>(&self, data: Packet<D>) -> Result<T>;
 
     async fn is_connected(&self) -> bool;
 }
 
 pub struct Tcp {
-    url: String,
+    pub(crate) url: String,
 }
 
 #[cfg(any(feature = "async", feature = "http"))]
@@ -57,25 +57,21 @@ impl Transport for Tcp {
         Ok(())
     }
 
-    async fn send_with_response<T: Copy, B: AsByteEncoded + Send>(&self, data: B) -> Result<T> {
+    async fn send_with_response<T: Copy, D: QubicRequest + Send>(&self, data: Packet<D>) -> Result<T> {
         use tokio::net::TcpStream;
-
         let mut stream = TcpStream::connect(&self.url).await?;
 
-        let mut buf = vec![0; std::mem::size_of::<T>() + 100];
-
+        let mut buf = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>() + std::mem::size_of::<Packet<T>>()];
         stream.write_all(data.encode_as_bytes()).await?;
 
-        stream.read(&mut buf).await?;
+        stream.read_exact(&mut buf).await?;
 
-        let offset = if self.is_connected().await { 0 } else { 24 };
+        let header = unsafe { *(buf.as_ptr() as *const Header) };
 
-        let header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
-
-        buf.truncate(offset as usize + header.get_size());
+        let offset = if header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers { std::mem::size_of::<Packet<ExchangePublicPeers>>() as isize } else { 0 };
 
         let res = unsafe {
-            *(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
+            std::ptr::read_unaligned(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
         };
 
         Ok(res)
@@ -90,7 +86,8 @@ impl Transport for Tcp {
 impl Transport for Tcp {
     fn new(url: String) -> Self {
         Self {
-            url
+            url,
+            is_connected: false
         }
     }
 
@@ -102,22 +99,20 @@ impl Transport for Tcp {
         Ok(())
     }
 
-    fn send_with_response<T: Copy>(&self, data: impl AsByteEncoded) -> Result<T> {
+    fn send_with_response<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<T> {
         let mut stream = TcpStream::connect(&self.url)?;
 
-        let mut buf = vec![0; std::mem::size_of::<T>() + 100];
+        let mut buf = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>() + std::mem::size_of::<Packet<T>>()];
         stream.write_all(data.encode_as_bytes())?;
 
-        stream.read(&mut buf)?;
+        stream.read_exact(&mut buf)?;
 
-        let offset = if self.is_connected() { 0 } else { 24 };
+        let header = unsafe { *(buf.as_ptr() as *const Header) };
 
-        let header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
-
-        buf.truncate(offset as usize + header.get_size());
+        let offset = if header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers { std::mem::size_of::<Packet<ExchangePublicPeers>>() as isize } else { 0 };
 
         let res = unsafe {
-            *(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
+            std::ptr::read_unaligned(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
         };
 
         Ok(res)

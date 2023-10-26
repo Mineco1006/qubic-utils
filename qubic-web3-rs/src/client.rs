@@ -174,8 +174,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
         loop {
             unsafe {
-                message.gamming_nonce = rng.gen();
-                copy_nonoverlapping(message.gamming_nonce.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
+                message.gamming_nonce.0 = rng.gen();
+                copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
                 kangarootwelve64to32::kangarootwelve64to32(&shared_key_and_gamming_nonce, &mut gamming_key);
             }
 
@@ -189,7 +189,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         kg.squeeze(&mut gamma);
 
         for i in 0..32 {
-            message.solution_nonce[i] = solution.nonce[i] ^ gamma[i];
+            message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i];
         }
 
         for sig in message.signature.0.iter_mut() {
@@ -233,6 +233,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     pub async fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<TickData> {
         let packet = Packet::new(RequestQuorumTick { tick, vote_flags }, true);
         
+        Ok(self.transport.send_with_response(packet).await?)
+    }
+
+    pub async fn exchange_public_peers(&self, peers: [Ipv4Addr; 4]) -> Result<ExchangePublicPeers> {
+        let packet = Packet::new(ExchangePublicPeers { peers }, true);
+
         Ok(self.transport.send_with_response(packet).await?)
     }
 
