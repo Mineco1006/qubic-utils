@@ -14,5 +14,5 @@ members = [
 [profile.dev]
 overflow-checks = false
 
-[build]
-rustflags = ["-C target-cpu=native"]
+[profile.release]
+strip = true

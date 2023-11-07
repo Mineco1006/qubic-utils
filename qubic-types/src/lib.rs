@@ -11,12 +11,12 @@ pub use ethereum_types::{H256, H512, U256};
 
 
 /// 32 byte nonce type
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Nonce(pub [u8; 32]);
 
 
 /// 64 byte SchnorrQ signature type
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Signature(pub [u8; 64]);
 
 impl Default for Signature {
@@ -46,7 +46,7 @@ impl Default for Signature {
 /// 
 /// assert!(id.verify(10u64, SIGNATURE));
 /// ```
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct QubicId(pub [u8; 32]);
 
 /// Represents a Qubic wallet containing private key, subseed and public key of the corresponding wallet

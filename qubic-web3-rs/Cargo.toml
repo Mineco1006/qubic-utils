@@ -17,6 +17,9 @@ serde = { version = "*", features = ["derive"]}
 qubic-tcp-types = { path = "../qubic-tcp-types" }
 async-trait = "*"
 
+[dev-dependencies]
+crossbeam-channel = "*"
+
 [features]
 http = []
 async = ["http"]

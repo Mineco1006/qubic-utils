@@ -1,11 +1,18 @@
-use std::{ptr::copy_nonoverlapping, net::{TcpStream, TcpListener, Ipv4Addr}};
+use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr};
+
+#[cfg(not(any(feature = "async", feature = "http")))]
+use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::types::{Transaction, Packet, GetCurrentTickInfo, CurrentTickInfo, WorkSolution, BroadcastMessage, RequestComputors, Computors, Entity, RequestEntity, ContractIpo, RequestContractIpo, TickData, RequestTickData, RequestQuorumTick, RawTransaction, ExchangePublicPeers};
+use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}}, MessageType, events::NetworkEvent, Header};
+use qubic_tcp_types::prelude::*;
 use anyhow::{Result, Ok};
 use kangarootwelve::KangarooTwelve;
-use qubic_types::{QubicWallet, QubicId};
+use qubic_types::{QubicWallet, QubicId, traits::AsByteEncoded};
 use rand::Rng;
+
+#[cfg(any(feature = "async", feature = "http"))]
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
 
 #[derive(Debug, Clone)]
@@ -132,7 +139,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     }
 
     pub fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<TickData> {
-        let packet = Packet::new(RequestQuorumTick { tick, vote_flags }, true);
+        let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
         
         Ok(self.transport.send_with_response(packet)?)
     }
@@ -143,8 +150,56 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet)?)
     }
 
-    pub fn connect(&self, _public_peers: [[u8; 4]; 4]) -> Result<(TcpStream, TcpListener)> {
-        todo!()
+    pub fn request_tick_transactions(&self, tick: u32, flags: TransactionFlags) -> Result<Vec<Transaction>> {
+        let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
+
+        Ok(self.transport.send_with_multiple_responses(packet)?)
+    }
+
+    pub fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()> 
+        where F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static
+    {
+        let stream = self.transport.connect()?;
+        let _: JoinHandle<Result<()>> = std::thread::Builder::new().name("qubic-event-handler".to_string()).stack_size(10_000_000).spawn(move || {
+            let event_handler = event_handler;
+            let mut stream = stream;
+            let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
+            let mut data_buffer = vec![0u8; 10_000_000];
+            stream.write_all(Packet::new(public_peers, true).encode_as_bytes())?;
+
+            loop {
+                stream.read_exact(&mut header_buffer)?;
+
+                let header = unsafe {
+                    read_unaligned(header_buffer.as_ptr() as *const Header)
+                };
+
+                stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())])?;
+
+
+
+                match header.message_type {
+                    MessageType::ExchangePublicPeers => {
+                        event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
+                    },
+                    MessageType::BroadcastMessage => {
+                        event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
+                    },
+                    MessageType::BroadcastTransaction => {
+                        event_handler(NetworkEvent::BroadcastTransaction(unsafe { read_unaligned(data_buffer.as_ptr() as *const Transaction) }))?;
+                    },
+                    MessageType::BroadcastTick => {
+                        event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
+                    },
+                    MessageType::BroadcastFutureTickData => {
+                        event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const FutureTickData) }))?;
+                    }
+                    _ => ()
+                }
+            }
+        })?;
+        
+        Ok(())
     }
 }
 
@@ -231,7 +286,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     }
 
     pub async fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<TickData> {
-        let packet = Packet::new(RequestQuorumTick { tick, vote_flags }, true);
+        let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
         
         Ok(self.transport.send_with_response(packet).await?)
     }
@@ -242,7 +297,55 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet).await?)
     }
 
-    pub fn connect(&self, _public_peers: [[u8; 4]; 4]) -> Result<(TcpStream, TcpListener)> {
-        todo!()
+    pub async fn request_tick_transactions(&self, tick: u32, flags: TransactionFlags) -> Result<Vec<Transaction>> {
+        let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
+
+        Ok(self.transport.send_with_multiple_responses(packet).await?)
+    }
+
+    pub async fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()> 
+        where F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static
+    {
+        let stream = self.transport.connect().await?;
+        let _: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+            let event_handler = event_handler;
+            let mut stream = stream;
+            let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
+            let mut data_buffer = vec![0u8; 10_000_000];
+            stream.write_all(Packet::new(public_peers, true).encode_as_bytes()).await?;
+
+            loop {
+                stream.read_exact(&mut header_buffer).await?;
+
+                let header = unsafe {
+                    read_unaligned(header_buffer.as_ptr() as *const Header)
+                };
+
+                stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())]).await?;
+
+
+
+                match header.message_type {
+                    MessageType::ExchangePublicPeers => {
+                        event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
+                    },
+                    MessageType::BroadcastMessage => {
+                        event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
+                    },
+                    MessageType::BroadcastTransaction => {
+                        event_handler(NetworkEvent::BroadcastTransaction(unsafe { read_unaligned(data_buffer.as_ptr() as *const Transaction) }))?;
+                    },
+                    MessageType::BroadcastTick => {
+                        event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
+                    },
+                    MessageType::BroadcastFutureTickData => {
+                        event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const FutureTickData) }))?;
+                    }
+                    _ => ()
+                }
+            }
+        });
+        
+        Ok(())
     }
 }

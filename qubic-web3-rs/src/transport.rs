@@ -2,7 +2,10 @@
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{net::TcpStream, io::{Write, Read}};
 
-use anyhow::Result;
+#[cfg(any(feature = "async", feature = "http"))]
+use tokio::net::TcpStream;
+
+use anyhow::{Result, Ok};
 
 use qubic_tcp_types::{Header, types::{Packet, ExchangePublicPeers}, MessageType, utils::QubicRequest};
 use qubic_types::traits::AsByteEncoded;
@@ -18,7 +21,9 @@ pub trait Transport {
 
     fn send_with_response<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<T>;
 
-    fn is_connected(&self) -> bool;
+    fn send_with_multiple_responses<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<T>>;
+
+    fn connect(&self) -> Result<TcpStream>;
 }
 
 #[cfg(any(feature = "async", feature = "http"))]
@@ -30,7 +35,9 @@ pub trait Transport {
 
     async fn send_with_response<T: Copy, D: QubicRequest + Send>(&self, data: Packet<D>) -> Result<T>;
 
-    async fn is_connected(&self) -> bool;
+    async fn send_with_multiple_responses<T: Copy + Send, D: QubicRequest + Send>(&self, data: Packet<D>) -> Result<Vec<T>>;
+
+    async fn connect(&self) -> Result<TcpStream>;
 }
 
 pub struct Tcp {
@@ -77,8 +84,50 @@ impl Transport for Tcp {
         Ok(res)
     }
 
-    async fn is_connected(&self) -> bool {
-        false
+    async fn send_with_multiple_responses<T: Copy + Send, D: QubicRequest + Send>(&self, data: Packet<D>) -> Result<Vec<T>> {
+        use tokio::net::TcpStream;
+        let mut ret: Vec<T> = Vec::new();
+
+        let mut stream = TcpStream::connect(&self.url).await?;
+
+        let mut header_buffer = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>()];
+        stream.write_all(data.encode_as_bytes()).await?;
+        stream.read_exact(&mut header_buffer).await?;
+        header_buffer = vec![0; std::mem::size_of::<Header>()];
+        let mut data_buffer = vec![0; std::mem::size_of::<T>()];
+        
+
+        loop {
+            stream.read_exact(&mut header_buffer).await?;
+
+            let header = unsafe { *(header_buffer.as_ptr() as *const Header) };
+
+
+            if header.message_type == MessageType::EndResponse {
+                break;
+            }
+
+            
+            stream.read_exact(&mut data_buffer).await?;
+
+            let res = unsafe {
+                std::ptr::read_unaligned(data_buffer.as_ptr() as *const T)
+            };
+
+            ret.push(res);
+
+            let size = header.get_size() - std::mem::size_of::<Header>() - std::mem::size_of::<T>();
+
+            if size > 0 {
+                stream.read_exact(&mut vec![0; size]).await?;
+            }
+        }
+        
+        Ok(ret)
+    }
+
+    async fn connect(&self) -> Result<TcpStream> {
+        Ok(TcpStream::connect(&self.url).await?)
     }
 }
 
@@ -98,6 +147,7 @@ impl Transport for Tcp {
         Ok(())
     }
 
+    // handle unfulfilled repsonses
     fn send_with_response<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<T> {
         let mut stream = TcpStream::connect(&self.url)?;
 
@@ -110,6 +160,10 @@ impl Transport for Tcp {
 
         let offset = if header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers { std::mem::size_of::<Packet<ExchangePublicPeers>>() as isize } else { 0 };
 
+        let header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
+
+        dbg!(header);
+
         let res = unsafe {
             std::ptr::read_unaligned(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
         };
@@ -117,7 +171,48 @@ impl Transport for Tcp {
         Ok(res)
     }
 
-    fn is_connected(&self) -> bool {
-        false
+    fn send_with_multiple_responses<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<T>> {
+        let mut ret: Vec<T> = Vec::new();
+
+        let mut stream = TcpStream::connect(&self.url)?;
+
+        let mut header_buffer = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>()];
+        stream.write_all(data.encode_as_bytes())?;
+        stream.read_exact(&mut header_buffer)?;
+        header_buffer = vec![0; std::mem::size_of::<Header>()];
+        let mut data_buffer = vec![0; std::mem::size_of::<T>()];
+        
+
+        loop {
+            stream.read_exact(&mut header_buffer)?;
+
+            let header = unsafe { *(header_buffer.as_ptr() as *const Header) };
+
+
+            if header.message_type == MessageType::EndResponse {
+                break;
+            }
+
+            
+            stream.read_exact(&mut data_buffer)?;
+
+            let res = unsafe {
+                std::ptr::read_unaligned(data_buffer.as_ptr() as *const T)
+            };
+
+            ret.push(res);
+
+            let size = header.get_size() - std::mem::size_of::<Header>() - std::mem::size_of::<T>();
+
+            if size > 0 {
+                stream.read_exact(&mut vec![0; size])?;
+            }
+        }
+        
+        Ok(ret)
+    }
+
+    fn connect(&self) -> Result<TcpStream> {
+        Ok(TcpStream::connect(&self.url)?)
     }
 }

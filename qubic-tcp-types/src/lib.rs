@@ -2,6 +2,9 @@ use rand::Rng;
 
 pub mod types;
 pub mod utils;
+pub mod prelude;
+pub mod consts;
+pub mod events;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -27,6 +30,15 @@ pub enum MessageType {
 
     RequestContractIPO = 33,
     RespondContractIPO = 34,
+
+    EndResponse = 35,
+
+    RequestIssuedAsset = 36,
+    RespondIssuedAsset = 37,
+    RequestOwnedAsset = 38,
+    RespondOwnedAsset = 39,
+    RequestPossessedAsset = 40,
+    RespondPossessedAsset = 41,
 
     ProcessSpecialCommand = 255
 }

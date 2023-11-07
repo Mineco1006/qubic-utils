@@ -1,4 +1,4 @@
-use qubic_tcp_types::types::{CurrentTickInfo, Entity, Transaction};
+use qubic_tcp_types::prelude::*;
 use qubic_types::{QubicId, Signature};
 use serde::{Serialize, Deserialize};
 
