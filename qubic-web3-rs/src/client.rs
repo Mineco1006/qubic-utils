@@ -104,7 +104,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             *sig = rng.gen();
         }
 
-        self.transport.send_without_response(Packet::new(message, true))?;
+        self.transport.send_without_response(Packet::new(message, false))?;
         Ok(())
     }
 
