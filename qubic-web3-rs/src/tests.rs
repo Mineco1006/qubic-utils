@@ -1,4 +1,5 @@
-use qubic_tcp_types::{prelude::TransactionFlags, types::ExchangePublicPeers, events::NetworkEvent};
+use qubic_tcp_types::{prelude::TransactionFlags, types::{ExchangePublicPeers, WorkSolution}, events::NetworkEvent};
+use qubic_types::{QubicId, Nonce};
 
 use crate::{*, transport::Tcp, client::Client};
 
@@ -87,6 +88,14 @@ fn test_subscription() {
 
         println!("Tick: {} | EP: {} | Solutions: {} | Transactions: {}", current_tick, ep, solutions, transactions);
     }
+}
+
+#[cfg(not(any(feature = "async", feature = "http")))]
+#[test]
+fn test_asset() {
+    let client = Client::<Tcp>::new("144.76.237.194:21841");
+
+    dbg!(client.qx().get_owned_asset(QubicId::from_str("REOQXSSEZVSGBAWPIGYHPDOUSGYASJQDICASQTVRRGURUTLCFQJWSDNGBZJG").unwrap()).unwrap());
 }
 
 

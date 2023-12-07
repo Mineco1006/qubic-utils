@@ -19,6 +19,7 @@ async-trait = "*"
 
 [dev-dependencies]
 crossbeam-channel = "*"
+hex = "*"
 
 [features]
 http = []

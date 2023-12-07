@@ -162,8 +162,6 @@ impl Transport for Tcp {
 
         let header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
 
-        dbg!(header);
-
         let res = unsafe {
             std::ptr::read_unaligned(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
         };

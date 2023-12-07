@@ -5,7 +5,8 @@ use axum::{
     extract::State,
     Router, Json,
 };
-use qubic_web3_rs::{client::Client, transport::Tcp};
+use qubic_types::QubicWallet;
+use qubic_web3_rs::{client::Client, transport::Tcp, qubic_tcp_types::types::transactions::{RawTransaction, Transaction}};
 use qubic_rpc_types::{JsonRpcRequest, JsonRpcResponse, ComputorInfos};
 use axum::http::Method;
 use tower_http::cors::{CorsLayer, Any};
@@ -21,7 +22,7 @@ struct Args {
     port: String,
 
     /// Computor to send requests
-    #[arg(short, long, default_value = "144.76.237.194:21842")]
+    #[arg(short, long, default_value = "167.235.118.235:21841")]
     computor: String
 }
 
@@ -114,12 +115,36 @@ async fn test() {
 
     dbg!(res);
 
+    if let JsonRpcResponse::RequestCurrentTickInfo { jsonrpc, id, result, error } = res {
+        let result = result.unwrap();
+        let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+
+        let raw_tx = RawTransaction {
+            from: wallet.public_key,
+            to: id,
+            amount: 0,
+            tick: result.tick + 20,
+            input_size: 0,
+            input_type: 0
+        };
+
+        let sig = wallet.sign(raw_tx);
+
+        let req = JsonRpcRequest::SendTransaction { jsonrpc: "2.0".to_string(), id: 0, params: Transaction { raw_transaction: raw_tx, signature: sig } };
+
+        let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
+
+        dbg!(res);
+    }
+
     let id = QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap();
     let req = JsonRpcRequest::RequestEntity { jsonrpc: "2.0".to_string(), id: 0, params: id };
 
     let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
 
     dbg!(res);
+
+    
 
     /*let req = JsonRpcRequest::RequestComputors { jsonrpc: "2.0".to_string(), id: 0 };
 
