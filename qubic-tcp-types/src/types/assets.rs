@@ -1,18 +1,89 @@
-use std::fmt::{Debug, Display};
+use std::{fmt::Debug, str::FromStr};
 
 use qubic_types::{QubicId, Signature};
 
-use crate::MessageType;
+use crate::{MessageType, utils::QubicRequest};
 
 use super::transactions::Transaction;
 
 pub const QXID: QubicId = QubicId([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+pub const TRANSFER_FEE: u64 = 1_000_000;
+pub const ISSUE_ASSET_FEE: u64 = 1_000_000_000;
+
+macro_rules! generate_packed_integer {
+    ($name: ident, $alias: ty) => {
+        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+        #[repr(C)]
+        pub struct $name([u8; std::mem::size_of::<$alias>()]);
+
+        impl ToString for $name {
+            fn to_string(&self) -> String {
+                <$alias>::from_le_bytes(self.0).to_string()
+            }
+        }
+        
+        impl Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(&self.to_string())?;
+        
+                Ok(())
+            }
+        }
+
+        impl From<$alias> for $name {
+            fn from(val: $alias) -> Self {
+                $name(val.to_le_bytes())
+            }
+        }
+
+        impl Into<$alias> for $name {
+            fn into(self) -> $alias {
+                <$alias>::from_le_bytes(self.0)
+            }
+        }
+    };
+}
+
+generate_packed_integer!(U16, u16);
+generate_packed_integer!(U32, u32);
+generate_packed_integer!(I64, i64);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct Name([u8; 7]);
+pub struct QxFunctionCall<T: Copy> {
+    pub tx: Transaction,
+    pub input: T,
+    pub signature: Signature
+}
 
-impl ToString for Name {
+impl<T: Copy> QubicRequest for QxFunctionCall<T> {
+    fn get_message_type() -> MessageType {
+        MessageType::BroadcastTransaction
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct AssetName(pub [u8; 7]);
+
+impl FromStr for AssetName {
+    type Err = qubic_types::errors::QubicError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() > 7 || !s.is_ascii() {
+            return Err(qubic_types::errors::QubicError::InvalidIdLengthError { ident: "Name", expected: 7, found: s.len() })
+        }
+
+        let mut name = [0u8; 7];
+
+        for (idx, c) in s.as_bytes().iter().enumerate() {
+            name[idx] = *c;
+        }
+
+        Ok(AssetName(name))
+    }
+}
+
+impl ToString for AssetName {
     fn to_string(&self) -> String {
         let mut name = String::with_capacity(7);
 
@@ -26,7 +97,7 @@ impl ToString for Name {
     }
 }
 
-impl Debug for Name {
+impl Debug for AssetName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.to_string())?;
 
@@ -37,7 +108,7 @@ impl Debug for Name {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct Issuance {
-    pub name: Name,
+    pub name: AssetName,
     pub number_of_decimal_places: u8,
     pub unit_of_measurement: [u8; 7]
 }
@@ -46,18 +117,18 @@ pub struct Issuance {
 #[repr(C)]
 pub struct Ownership {
     pub padding: u8,
-    pub managing_contract_index: [u8; 2],
-    pub issuance_index: [u8; 4],
-    pub number_of_units: [u8; 8]
+    pub managing_contract_index: U16,
+    pub issuance_index: U32,
+    pub number_of_units: I64
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct Possession {
     pub padding: u8,
-    pub managing_contract_index: [u8; 2],
-    pub issuance_index: [u8; 4],
-    pub number_of_units: [u8; 8]
+    pub managing_contract_index: U16,
+    pub issuance_index: U32,
+    pub number_of_units: I64
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -105,19 +176,15 @@ pub struct IssueAssetOutput {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct TranferAssetOwnershipAndPossessionInput {
-    pub transaction: Transaction,
-
+pub struct TransferAssetOwnershipAndPossessionInput {
     pub issuer: QubicId,
     pub possessor: QubicId,
     pub new_owner: QubicId,
     pub asset_name: u64,
     pub number_of_units: i64,
-
-    pub signature: Signature
 }
 
-set_message_type!(TranferAssetOwnershipAndPossessionInput, MessageType::BroadcastTransaction);
+set_message_type!(TransferAssetOwnershipAndPossessionInput, MessageType::BroadcastTransaction);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -131,7 +198,10 @@ pub struct RequestIssuedAsset {
     pub public_key: QubicId
 }
 
+set_message_type!(RequestIssuedAsset, MessageType::RequestIssuedAsset);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C, align(8))]
 pub struct RespondIssuedAsset {
     pub asset: Asset,
     pub tick: u32
@@ -159,16 +229,13 @@ pub struct RequestPossessedAsset {
     pub public_key: QubicId
 }
 
+set_message_type!(RequestPossessedAsset, MessageType::RequestPossessedAsset);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
+#[repr(C, align(8))]
 pub struct RespondPossessedAsset {
     pub asset: Asset,
     pub ownership_asset: Asset,
     pub issuance_asset: Asset,
     pub tick: u32
-}
-
-#[test]
-fn test() {
-    dbg!(std::mem::size_of::<Asset>());
 }

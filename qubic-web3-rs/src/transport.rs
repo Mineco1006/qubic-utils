@@ -160,7 +160,7 @@ impl Transport for Tcp {
 
         let offset = if header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers { std::mem::size_of::<Packet<ExchangePublicPeers>>() as isize } else { 0 };
 
-        let header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
+        let _header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
 
         let res = unsafe {
             std::ptr::read_unaligned(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
@@ -179,7 +179,6 @@ impl Transport for Tcp {
         stream.read_exact(&mut header_buffer)?;
         header_buffer = vec![0; std::mem::size_of::<Header>()];
         let mut data_buffer = vec![0; std::mem::size_of::<T>()];
-        
 
         loop {
             stream.read_exact(&mut header_buffer)?;

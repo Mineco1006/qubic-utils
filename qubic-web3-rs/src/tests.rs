@@ -1,5 +1,5 @@
-use qubic_tcp_types::{prelude::TransactionFlags, types::{ExchangePublicPeers, WorkSolution}, events::NetworkEvent};
-use qubic_types::{QubicId, Nonce};
+use qubic_tcp_types::{prelude::TransactionFlags, types::ExchangePublicPeers, events::NetworkEvent};
+use qubic_types::QubicId;
 
 use crate::{*, transport::Tcp, client::Client};
 
@@ -95,7 +95,9 @@ fn test_subscription() {
 fn test_asset() {
     let client = Client::<Tcp>::new("144.76.237.194:21841");
 
-    dbg!(client.qx().get_owned_asset(QubicId::from_str("REOQXSSEZVSGBAWPIGYHPDOUSGYASJQDICASQTVRRGURUTLCFQJWSDNGBZJG").unwrap()).unwrap());
+    dbg!(client.qx().request_owned_assets(QubicId::from_str("REOQXSSEZVSGBAWPIGYHPDOUSGYASJQDICASQTVRRGURUTLCFQJWSDNGBZJG").unwrap()).unwrap());
+
+    dbg!(client.qx().request_issued_assets(QubicId::default()).unwrap());
 }
 
 

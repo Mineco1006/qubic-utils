@@ -1,10 +1,10 @@
-use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr};
+use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr, str::FromStr};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, assets::{RespondOwnedAsset, RequestOwnedAsset, QXID, TranferAssetOwnershipAndPossessionInput, TranferAssetOwnershipAndPossessionOutput}}, MessageType, events::NetworkEvent, Header};
+use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, assets::{RespondOwnedAsset, RequestOwnedAsset, QXID, TransferAssetOwnershipAndPossessionInput, QxFunctionCall, ISSUE_ASSET_FEE, IssueAssetInput, AssetName, RespondIssuedAsset, RequestIssuedAsset, RespondPossessedAsset, RequestPossessedAsset}}, MessageType, events::NetworkEvent, Header};
 use qubic_tcp_types::prelude::*;
 use anyhow::{Result, Ok};
 use kangarootwelve::KangarooTwelve;
@@ -216,20 +216,32 @@ pub struct Qx<'a, T: Transport> {
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 impl<'a, T: Transport> Qx<'a, T> {
-    pub fn get_owned_asset(&self, id: QubicId) -> Result<RespondOwnedAsset> {
+    pub fn request_owned_assets(&self, id: QubicId) -> Result<Vec<RespondOwnedAsset>> {
         let packet = Packet::new(RequestOwnedAsset { public_key: id }, true);
 
-        Ok(self.transport.send_with_response(packet)?)
+        Ok(self.transport.send_with_multiple_responses(packet)?)
     }
 
-    pub fn transfer_qx_share(&self, wallet: &QubicWallet, possessor: QubicId, to: QubicId, units: i64, tick: u32) -> Result<TranferAssetOwnershipAndPossessionOutput> {
-        let mut tx = RawTransaction {
+    pub fn request_issued_assets(&self, id: QubicId) -> Result<Vec<RespondIssuedAsset>> {
+        let packet = Packet::new(RequestIssuedAsset { public_key: id }, true);
+
+        Ok(self.transport.send_with_multiple_responses(packet)?)
+    }
+
+    pub fn request_possessed_assets(&self, id: QubicId) -> Result<Vec<RespondPossessedAsset>> {
+        let packet = Packet::new(RequestPossessedAsset { public_key: id }, true);
+
+        Ok(self.transport.send_with_multiple_responses(packet)?)
+    }
+
+    pub fn transfer_qx_share(&self, wallet: &QubicWallet, possessor: QubicId, to: QubicId, units: i64, tick: u32) -> Result<()> {
+        let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: 1_000_000,
             tick,
             input_type: 2,
-            input_size: (std::mem::size_of::<TranferAssetOwnershipAndPossessionInput>() - std::mem::size_of::<Transaction>() - std::mem::size_of::<Signature>()) as u16
+            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
         };
 
         let tx = Transaction {
@@ -237,25 +249,102 @@ impl<'a, T: Transport> Qx<'a, T> {
             signature: wallet.sign(tx)
         };
 
-        let mut ta = TranferAssetOwnershipAndPossessionInput {
-            transaction: tx,
-            possessor,
-            issuer: QubicId::default(),
-            new_owner: to,
-            asset_name: u64::from_le_bytes([b'Q', b'X', 0, 0, 0, 0, 0, 0]),
-            number_of_units: units,
+        let mut call = QxFunctionCall {
+            tx,
+            input: TransferAssetOwnershipAndPossessionInput {
+                possessor,
+                issuer: QubicId::default(),
+                new_owner: to,
+                asset_name: u64::from_le_bytes([b'Q', b'X', 0, 0, 0, 0, 0, 0]),
+                number_of_units: units
+            },
             signature: Signature::default()
         };
 
-        ta.signature = wallet.sign(ta);
+        call.signature = wallet.sign(&call.encode_as_bytes()[..std::mem::size_of::<QxFunctionCall<TransferAssetOwnershipAndPossessionInput>>() - std::mem::size_of::<Signature>()]);
 
-        let packet = Packet::new(ta, true);
+        let packet = Packet::new(call, false);
 
-        Ok(self.transport.send_with_response(packet)?)
+        Ok(self.transport.send_without_response(packet)?)
     }
 
-    pub fn issue_asset(&self, wallet: &QubicWallet, name: [u8; 8], unit_of_measurement: [u8; 7], number_of_units: i64, number_of_decimal_places: i8) -> Result<()> {
-        todo!()
+    pub fn issue_asset(&self, wallet: &QubicWallet, name: &String, unit_of_measurement: [u8; 7], number_of_units: i64, number_of_decimal_places: i8, tick: u32) -> Result<()> {
+        let tx = RawTransaction {
+            from: wallet.public_key,
+            to: QXID,
+            amount: ISSUE_ASSET_FEE,
+            tick,
+            input_type: 1,
+            input_size: std::mem::size_of::<IssueAssetInput>() as u16
+        };
+
+        let tx = Transaction {
+            raw_transaction: tx,
+            signature: wallet.sign(tx)
+        };
+
+        let name = AssetName::from_str(name)?;
+
+        let mut padded_name = [0; 8];
+        let mut padded_uom = [0; 8];
+
+        padded_name[..7].copy_from_slice(&name.0);
+        padded_uom[..7].copy_from_slice(&unit_of_measurement);
+
+        let mut call = QxFunctionCall {
+            tx,
+            input: IssueAssetInput {
+                name: u64::from_le_bytes(padded_name),
+                number_of_units,
+                unit_of_measurement: u64::from_le_bytes(padded_uom),
+                number_of_decimal_places
+            },
+            signature: Signature::default()
+        };
+
+        call.signature = wallet.sign(&call.encode_as_bytes()[..std::mem::size_of::<QxFunctionCall<IssueAssetInput>>() - std::mem::size_of::<Signature>()]);
+
+        let packet = Packet::new(call, false);
+
+        Ok(self.transport.send_without_response(packet)?)
+    }
+
+    pub fn transfer_asset(&self, wallet: &QubicWallet, possessor: QubicId, issuer: QubicId, to: QubicId, name: String, units: i64, tick: u32) -> Result<()> {
+        let tx = RawTransaction {
+            from: wallet.public_key,
+            to: QXID,
+            amount: 1_000_000,
+            tick,
+            input_type: 2,
+            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
+        };
+
+        let tx = Transaction {
+            raw_transaction: tx,
+            signature: wallet.sign(tx)
+        };
+
+        let name = AssetName::from_str(&name)?;
+        let mut padded_asset_name = [0u8; 8];
+        padded_asset_name[..7].copy_from_slice(&name.0);
+
+        let mut call = QxFunctionCall {
+            tx,
+            input: TransferAssetOwnershipAndPossessionInput {
+                possessor,
+                issuer,
+                new_owner: to,
+                asset_name: u64::from_le_bytes(padded_asset_name),
+                number_of_units: units
+            },
+            signature: Signature::default()
+        };
+
+        call.signature = wallet.sign(&call.encode_as_bytes()[..std::mem::size_of::<QxFunctionCall<TransferAssetOwnershipAndPossessionInput>>() - std::mem::size_of::<Signature>()]);
+
+        let packet = Packet::new(call, false);
+
+        Ok(self.transport.send_without_response(packet)?)
     }
 }
 
