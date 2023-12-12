@@ -4,7 +4,7 @@ use qubic_types::{QubicId, Signature};
 
 use crate::{MessageType, utils::QubicRequest};
 
-use super::transactions::Transaction;
+use super::transactions::RawTransaction;
 
 pub const QXID: QubicId = QubicId([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 pub const TRANSFER_FEE: u64 = 1_000_000;
@@ -48,11 +48,17 @@ generate_packed_integer!(U16, u16);
 generate_packed_integer!(U32, u32);
 generate_packed_integer!(I64, i64);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct RawQxFunctionCall<T: Copy> {
+    pub tx: RawTransaction,
+    pub input: T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct QxFunctionCall<T: Copy> {
-    pub tx: Transaction,
-    pub input: T,
+    pub raw_call: RawQxFunctionCall<T>,
     pub signature: Signature
 }
 
@@ -64,16 +70,16 @@ impl<T: Copy> QubicRequest for QxFunctionCall<T> {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct AssetName(pub [u8; 7]);
+pub struct AssetName<const LEN: usize>(pub [u8; LEN]);
 
-impl FromStr for AssetName {
+impl<const LEN: usize> FromStr for AssetName<LEN> {
     type Err = qubic_types::errors::QubicError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() > 7 || !s.is_ascii() {
+        if s.len() > LEN || !s.is_ascii() {
             return Err(qubic_types::errors::QubicError::InvalidIdLengthError { ident: "Name", expected: 7, found: s.len() })
         }
 
-        let mut name = [0u8; 7];
+        let mut name = [0u8; LEN];
 
         for (idx, c) in s.as_bytes().iter().enumerate() {
             name[idx] = *c;
@@ -83,9 +89,9 @@ impl FromStr for AssetName {
     }
 }
 
-impl ToString for AssetName {
+impl<const LEN: usize> ToString for AssetName<LEN> {
     fn to_string(&self) -> String {
-        let mut name = String::with_capacity(7);
+        let mut name = String::with_capacity(LEN);
 
         for byte in self.0 {
             if byte != 0 {
@@ -97,7 +103,7 @@ impl ToString for AssetName {
     }
 }
 
-impl Debug for AssetName {
+impl<const LEN: usize> Debug for AssetName<LEN> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.to_string())?;
 
@@ -108,7 +114,7 @@ impl Debug for AssetName {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct Issuance {
-    pub name: AssetName,
+    pub name: AssetName<7>,
     pub number_of_decimal_places: u8,
     pub unit_of_measurement: [u8; 7]
 }
@@ -162,7 +168,7 @@ pub struct FeesOutput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct IssueAssetInput {
-    pub name: u64,
+    pub name: AssetName<8>,
     pub number_of_units: i64,
     pub unit_of_measurement: u64,
     pub number_of_decimal_places: i8
@@ -180,7 +186,7 @@ pub struct TransferAssetOwnershipAndPossessionInput {
     pub issuer: QubicId,
     pub possessor: QubicId,
     pub new_owner: QubicId,
-    pub asset_name: u64,
+    pub asset_name: AssetName<8>,
     pub number_of_units: i64,
 }
 

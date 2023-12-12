@@ -93,11 +93,15 @@ fn test_subscription() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_asset() {
-    let client = Client::<Tcp>::new("144.76.237.194:21841");
+    let client = Client::<Tcp>::new("57.129.19.155:31841");
 
-    dbg!(client.qx().request_owned_assets(QubicId::from_str("REOQXSSEZVSGBAWPIGYHPDOUSGYASJQDICASQTVRRGURUTLCFQJWSDNGBZJG").unwrap()).unwrap());
+    dbg!(client.qu().request_entity(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());
+    dbg!(client.qx().request_owned_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());
+    dbg!(client.qx().request_owned_assets(QubicId::from_str("MINECOMVVJWRHCKXPROBYQFUGKHAFMRIIYKPMDXGVAJLGHCMIRVVVDIBJIKB").unwrap()).unwrap());
 
     dbg!(client.qx().request_issued_assets(QubicId::default()).unwrap());
+
+    dbg!(client.qx().request_issued_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());
 }
 
 

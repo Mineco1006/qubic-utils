@@ -13,6 +13,3 @@ log = "*"
 env_logger = "*"
 structopt = "*"
 itertools = "*"
-
-[build]
-rustflags = ["-C target-cpu=native"]
