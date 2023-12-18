@@ -1,10 +1,8 @@
 use std::{fmt::Debug, str::FromStr};
 
-use qubic_types::{QubicId, Signature};
+use qubic_types::QubicId;
 
-use crate::{MessageType, utils::QubicRequest};
-
-use super::transactions::RawTransaction;
+use crate::MessageType;
 
 pub const QXID: QubicId = QubicId([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 pub const TRANSFER_FEE: u64 = 1_000_000;
@@ -47,26 +45,6 @@ macro_rules! generate_packed_integer {
 generate_packed_integer!(U16, u16);
 generate_packed_integer!(U32, u32);
 generate_packed_integer!(I64, i64);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub struct RawQxFunctionCall<T: Copy> {
-    pub tx: RawTransaction,
-    pub input: T,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub struct QxFunctionCall<T: Copy> {
-    pub raw_call: RawQxFunctionCall<T>,
-    pub signature: Signature
-}
-
-impl<T: Copy> QubicRequest for QxFunctionCall<T> {
-    fn get_message_type() -> MessageType {
-        MessageType::BroadcastTransaction
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]

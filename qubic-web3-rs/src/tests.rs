@@ -92,6 +92,21 @@ fn test_subscription() {
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
+fn test_ipo() {
+    use qubic_types::QubicWallet;
+
+    let client = Client::<Tcp>::new("57.129.19.155:31841");
+    let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+
+    dbg!(client.qu().request_contract_ipo(3).unwrap().public_keys);
+
+    let current_tick = client.qu().get_current_tick_info().unwrap();
+
+    client.qu().make_ipo_bid(&wallet, 3, 4, 2, current_tick.tick + 10).unwrap();
+}
+
+#[cfg(not(any(feature = "async", feature = "http")))]
+#[test]
 fn test_asset() {
     let client = Client::<Tcp>::new("57.129.19.155:31841");
 

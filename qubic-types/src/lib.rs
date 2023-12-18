@@ -77,3 +77,7 @@ pub struct QubicWallet {
     subseed: [u8; 32],
     pub public_key: QubicId
 }
+
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct QubicTxHash(pub [u8; 32]);

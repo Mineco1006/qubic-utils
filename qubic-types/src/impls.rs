@@ -1,12 +1,12 @@
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::{_subborrow_u64, _addcarry_u64};
 
-use std::{ptr::copy_nonoverlapping, fmt::{Debug, Display}};
+use std::{ptr::copy_nonoverlapping, fmt::{Debug, Display}, str::FromStr};
 
 use four_q::{types::PointAffine, ops::{ecc_mul_fixed, encode, decode, ecc_mul, montgomery_multiply_mod_order, ecc_mul_double}, consts::{MONTGOMERY_R_PRIME, ONE, CURVE_ORDER_0, CURVE_ORDER_1, CURVE_ORDER_3, CURVE_ORDER_2}};
 use kangarootwelve::KangarooTwelve;
 
-use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::AsByteEncoded, Nonce};
+use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::AsByteEncoded, Nonce, QubicTxHash};
 
 fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
     #[cfg(target_arch = "x86_64")]
@@ -450,5 +450,76 @@ impl Debug for Nonce {
 impl Display for Nonce {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("0x{}", hex::encode(&self.0)))
+    }
+}
+
+impl QubicTxHash {
+    #[inline]
+    pub fn get_identity(&self) -> String {
+        let mut identity = [0u8; 60];
+        for i in 0..4 {
+            let mut public_key_fragment = u64::from_le_bytes(self.0[i << 3..(i << 3) + 8].try_into().unwrap());
+            for j in 0..14 {
+                identity[i * 14 + j] = (public_key_fragment % 26) as u8 + b'a';
+                public_key_fragment /= 26;
+            }
+        }
+
+        let mut identity_bytes_checksum = [0u8; 3];
+        let mut kg = KangarooTwelve::hash(&self.0, &[]);
+        kg.squeeze(&mut identity_bytes_checksum);
+        let mut identity_bytes_checksum = identity_bytes_checksum[0] as u64 | (identity_bytes_checksum[1] as u64) << 8 | (identity_bytes_checksum[2] as u64) << 16;
+        identity_bytes_checksum &= 0x3FFFF;
+        for i in 0..4 {
+            identity[56 + i] = (identity_bytes_checksum % 26) as u8 + b'a';
+            identity_bytes_checksum /= 26;
+        }
+
+        String::from_utf8(identity.to_vec()).unwrap()
+    }
+}
+
+impl FromStr for QubicTxHash {
+    type Err = QubicError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut buffer = [0u8; 32];
+
+        if !s.chars().all(|c| c.is_lowercase() && c.is_ascii_alphabetic()) {
+            return Err(QubicError::InvalidIdFormatError { ident: "TxHash" })
+        }
+
+        let id = s.as_bytes();
+
+        if id.len() != 60 {
+            return Err(QubicError::InvalidIdLengthError { ident: "TxHash", expected: 60, found: id.len()})
+        }
+
+        for i in 0..4 {
+            for j in (0..14usize).rev() {
+                let im = u64::from_le_bytes(buffer[i << 3..(i << 3) + 8].try_into().unwrap()) * 26 + (id[i * 14 + j] - b'a') as u64;
+                let im = im.to_le_bytes();
+                
+                for k in 0..8 {
+                    buffer[(i << 3) + k] = im[k];
+                }
+            }
+        }
+        
+
+        Ok(Self(buffer))
+    }
+}
+
+impl Debug for QubicTxHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let id = self.get_identity();
+        f.write_str(&format!("{}...{}", &id[..5], &id[55..]))
+    }
+}
+
+impl Display for QubicTxHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.get_identity())
     }
 }

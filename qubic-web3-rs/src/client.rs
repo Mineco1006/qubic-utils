@@ -4,11 +4,11 @@ use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr, str::FromSt
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, assets::{RespondOwnedAsset, RequestOwnedAsset, QXID, TransferAssetOwnershipAndPossessionInput, QxFunctionCall, ISSUE_ASSET_FEE, IssueAssetInput, AssetName, RespondIssuedAsset, RequestIssuedAsset, RespondPossessedAsset, RequestPossessedAsset, RawQxFunctionCall}}, MessageType, events::NetworkEvent, Header};
+use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, assets::{RespondOwnedAsset, RequestOwnedAsset, QXID, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, IssueAssetInput, AssetName, RespondIssuedAsset, RequestIssuedAsset, RespondPossessedAsset, RequestPossessedAsset, TRANSFER_FEE}, ContractIpoBid}, MessageType, events::NetworkEvent, Header};
 use qubic_tcp_types::prelude::*;
 use anyhow::{Result, Ok};
 use kangarootwelve::KangarooTwelve;
-use qubic_types::{QubicWallet, QubicId, traits::AsByteEncoded, Signature};
+use qubic_types::{QubicWallet, QubicId, traits::AsByteEncoded, Signature, QubicTxHash};
 use rand::Rng;
 
 #[cfg(any(feature = "async", feature = "http"))]
@@ -64,7 +64,7 @@ pub const NUMBER_OF_EXCHANGES_PEERS: usize = 4;
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 impl<'a, T> Qu<'a, T> where T: Transport {
-    pub fn send_raw_transaction(&self, wallet: &QubicWallet, raw_transaction: RawTransaction) -> Result<()> {
+    pub fn send_raw_transaction(&self, wallet: &QubicWallet, raw_transaction: RawTransaction) -> Result<QubicTxHash> {
         
         let transaction = Transaction {
             raw_transaction,
@@ -72,12 +72,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         };
 
         self.transport.send_without_response(Packet::new(transaction, false))?;
-        Ok(())
+        Ok(transaction.into())
     }
 
-    pub fn send_signed_transaction(&self, transaction: Transaction) -> Result<()> {
+    pub fn send_signed_transaction(&self, transaction: Transaction) -> Result<QubicTxHash> {
         self.transport.send_without_response(Packet::new(transaction, false))?;
-        Ok(())
+        Ok(transaction.into())
     }
 
     pub fn submit_work(&self, solution: WorkSolution) -> Result<()> {
@@ -190,10 +190,78 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                         event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
                     },
                     MessageType::BroadcastMessage => {
+                        
                         event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
                     },
                     MessageType::BroadcastTransaction => {
-                        event_handler(NetworkEvent::BroadcastTransaction(unsafe { read_unaligned(data_buffer.as_ptr() as *const Transaction) }))?;
+                        let tx = unsafe { read_unaligned(data_buffer.as_ptr() as *const RawTransaction) };
+
+                        if tx.input_type == 0 && tx.input_size == 0 {
+                            let tx = Transaction {
+                                raw_transaction: tx,
+                                signature: unsafe { read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const Signature) }
+                            };
+                            event_handler(NetworkEvent::BroadcastTransaction(tx))?;
+                        } else {
+                            match tx.input_type {
+                                0 => {
+                                    let input = unsafe {
+                                        read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const ContractIpoBid)
+                                    };
+                                    let signature = unsafe {
+                                        read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
+                                    };
+
+                                    let call = Call {
+                                        raw_call: RawCall {
+                                            tx,
+                                            input
+                                        },
+                                        signature
+                                    };
+
+                                    event_handler(NetworkEvent::BroadcastIpoBid(call))?;
+                                },
+                                1 => {
+                                    let input = unsafe {
+                                        read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const IssueAssetInput)
+                                    };
+                                    let signature = unsafe {
+                                        read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
+                                    };
+
+                                    let call = Call {
+                                        raw_call: RawCall {
+                                            tx,
+                                            input
+                                        },
+                                        signature
+                                    };
+
+                                    event_handler(NetworkEvent::BroadcasQxAssetIssuance(call))?;
+                                },
+                                2 => {
+                                    let input = unsafe {
+                                        read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const TransferAssetOwnershipAndPossessionInput)
+                                    };
+                                    let signature = unsafe {
+                                        read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
+                                    };
+
+                                    let call = Call {
+                                        raw_call: RawCall {
+                                            tx,
+                                            input
+                                        },
+                                        signature
+                                    };
+
+                                    event_handler(NetworkEvent::BroadcastQxTransfer(call))?;
+                                }
+                                _ => ()
+                            }
+                        }
+                        
                     },
                     MessageType::BroadcastTick => {
                         event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
@@ -207,6 +275,37 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         })?;
         
         Ok(())
+    }
+
+    pub fn make_ipo_bid(&self, wallet: &QubicWallet, contract_index: u32, price_per_share: u64, number_of_shares: u16, tick: u32) -> Result<QubicTxHash> {
+        let mut dst = QubicId::default();
+
+        dst.0[0..4].copy_from_slice(&contract_index.to_le_bytes());
+
+        let raw_call = RawCall {
+            tx: RawTransaction {
+                from: wallet.public_key,
+                to: dst,
+                amount: 0,
+                tick,
+                input_type: 0,
+                input_size: std::mem::size_of::<ContractIpoBid>() as u16
+            },
+            input: ContractIpoBid {
+                price: price_per_share,
+                quantity: number_of_shares
+            }
+        };
+
+        let call = Call {
+            raw_call,
+            signature: wallet.sign(raw_call)
+        };
+
+        let packet = Packet::new(call, false);
+
+        self.transport.send_without_response(packet)?;
+        Ok(call.into())
     }
 }
 
@@ -234,18 +333,18 @@ impl<'a, T: Transport> Qx<'a, T> {
         Ok(self.transport.send_with_multiple_responses(packet)?)
     }
 
-    pub fn transfer_qx_share(&self, wallet: &QubicWallet, possessor: QubicId, to: QubicId, units: i64, tick: u32) -> Result<()> {
+    pub fn transfer_qx_share(&self, wallet: &QubicWallet, possessor: QubicId, to: QubicId, units: i64, tick: u32) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
-            amount: 1_000_000,
+            amount: TRANSFER_FEE,
             tick,
             input_type: 2,
             input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
         };
 
-        let mut call = QxFunctionCall {
-            raw_call: RawQxFunctionCall {
+        let mut call = Call {
+            raw_call: RawCall {
                 tx,
                 input: TransferAssetOwnershipAndPossessionInput {
                     possessor,
@@ -262,10 +361,12 @@ impl<'a, T: Transport> Qx<'a, T> {
 
         let packet = Packet::new(call, false);
 
-        Ok(self.transport.send_without_response(packet)?)
+        self.transport.send_without_response(packet)?;
+
+        Ok(call.into())
     }
 
-    pub fn issue_asset(&self, wallet: &QubicWallet, name: &str, unit_of_measurement: [u8; 7], number_of_units: i64, number_of_decimal_places: i8, tick: u32) -> Result<()> {
+    pub fn issue_asset(&self, wallet: &QubicWallet, name: &str, unit_of_measurement: [u8; 7], number_of_units: i64, number_of_decimal_places: i8, tick: u32) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
@@ -279,8 +380,8 @@ impl<'a, T: Transport> Qx<'a, T> {
 
         padded_uom[..7].copy_from_slice(&unit_of_measurement);
 
-        let mut call = QxFunctionCall {
-            raw_call: RawQxFunctionCall {
+        let mut call = Call {
+            raw_call: RawCall {
                 tx,
                 input: IssueAssetInput {
                     name: AssetName::from_str(name)?,
@@ -295,11 +396,12 @@ impl<'a, T: Transport> Qx<'a, T> {
         call.signature = wallet.sign(call.raw_call);
 
         let packet = Packet::new(call, false);
+        self.transport.send_without_response(packet)?;
 
-        Ok(self.transport.send_without_response(packet)?)
+        Ok(call.into())
     }
 
-    pub fn transfer_asset(&self, wallet: &QubicWallet, possessor: QubicId, issuer: QubicId, to: QubicId, name: &str, units: i64, tick: u32) -> Result<()> {
+    pub fn transfer_asset(&self, wallet: &QubicWallet, possessor: QubicId, issuer: QubicId, to: QubicId, name: &str, units: i64, tick: u32) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
@@ -309,8 +411,8 @@ impl<'a, T: Transport> Qx<'a, T> {
             input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
         };
 
-        let mut call = QxFunctionCall {
-            raw_call: RawQxFunctionCall {
+        let mut call = Call {
+            raw_call: RawCall {
                 tx,
                 input: TransferAssetOwnershipAndPossessionInput {
                     possessor,
@@ -327,7 +429,8 @@ impl<'a, T: Transport> Qx<'a, T> {
 
         let packet = Packet::new(call, false);
 
-        Ok(self.transport.send_without_response(packet)?)
+        self.transport.send_without_response(packet)?;
+        Ok(call.into())
     }
 }
 

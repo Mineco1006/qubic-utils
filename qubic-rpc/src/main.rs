@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     Router, Json,
 };
-use qubic_types::QubicWallet;
+use qubic_types::{QubicWallet, QubicId};
 use qubic_web3_rs::{client::Client, transport::Tcp, qubic_tcp_types::types::transactions::{RawTransaction, Transaction}};
 use qubic_rpc_types::{JsonRpcRequest, JsonRpcResponse, ComputorInfos};
 use axum::http::Method;
@@ -113,15 +113,13 @@ async fn test() {
 
     let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
 
-    dbg!(res);
-
-    if let JsonRpcResponse::RequestCurrentTickInfo { jsonrpc, id, result, error } = res {
+    if let JsonRpcResponse::RequestCurrentTickInfo { jsonrpc: _, id: _, result, error: _ } = res {
         let result = result.unwrap();
         let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 
         let raw_tx = RawTransaction {
             from: wallet.public_key,
-            to: id,
+            to: QubicId::default(),
             amount: 0,
             tick: result.tick + 20,
             input_size: 0,

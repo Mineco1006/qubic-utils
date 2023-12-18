@@ -1,6 +1,8 @@
+use std::str::FromStr;
+
 use serde::{Serialize, Deserialize, de::Visitor};
 
-use crate::{QubicId, Signature, Nonce};
+use crate::{QubicId, Signature, Nonce, QubicTxHash};
 
 
 struct QubicIdVisitor;
@@ -42,6 +44,47 @@ impl<'de> Deserialize<'de> for QubicId {
         deserializer.deserialize_str(QubicIdVisitor)
     }
 }
+
+struct QubicTxHashVisitor;
+
+impl<'de> Visitor<'de> for QubicTxHashVisitor {
+    type Value = QubicTxHash;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("60 lowercase character alphabetic ASCII string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: serde::de::Error, {
+        match QubicTxHash::from_str(value) {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                Err(E::custom(e.to_string()))
+            } 
+        }
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E> where E: serde::de::Error, {
+        match QubicTxHash::from_str(&value) {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                Err(E::custom(e.to_string()))
+            } 
+        }
+    }
+}
+
+impl Serialize for QubicTxHash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+        serializer.collect_str(&self.get_identity())
+    }
+}
+
+impl<'de> Deserialize<'de> for QubicTxHash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+        deserializer.deserialize_str(QubicTxHashVisitor)
+    }
+}
+
 
 struct HexVisitor<const LENGTH: usize>;
 

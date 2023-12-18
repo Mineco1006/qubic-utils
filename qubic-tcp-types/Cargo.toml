@@ -11,6 +11,7 @@ serde = { version = "*", features = ["derive"] }
 rand = { version = "*" }
 wbg-rand = "*"
 qubic-types = { path= "../qubic-types" }
+kangarootwelve = "0.1.2"
 
 [features]
 serde = ["qubic-types/serde"]

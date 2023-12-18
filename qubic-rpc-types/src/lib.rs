@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 #[serde(tag = "method", rename_all = "camelCase")]
 pub enum JsonRpcRequest {
     RequestCurrentTickInfo { jsonrpc: String, id: usize },
+    
     /// params: qubic ID
     RequestEntity { jsonrpc: String, id: usize, params: QubicId },
 

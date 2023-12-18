@@ -1,8 +1,9 @@
 use std::num::NonZeroUsize;
 
-use qubic_types::{QubicId, Signature};
+use kangarootwelve::KangarooTwelve;
+use qubic_types::{QubicId, Signature, QubicTxHash, traits::AsByteEncoded};
 
-use crate::{MessageType, consts::NUMBER_OF_TRANSACTION_PER_TICK};
+use crate::{MessageType, consts::NUMBER_OF_TRANSACTION_PER_TICK, utils::QubicRequest};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -14,6 +15,26 @@ pub struct RawTransaction {
     pub tick: u32,
     pub input_type: u16,
     pub input_size: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct RawCall<T: Copy> {
+    pub tx: RawTransaction,
+    pub input: T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct Call<T: Copy> {
+    pub raw_call: RawCall<T>,
+    pub signature: Signature
+}
+
+impl<T: Copy> QubicRequest for Call<T> {
+    fn get_message_type() -> MessageType {
+        MessageType::BroadcastTransaction
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -75,3 +96,25 @@ pub struct RequestedTickTransactions {
 }
 
 set_message_type!(RequestedTickTransactions, MessageType::RequestTickTransactions);
+
+impl Into<QubicTxHash> for Transaction {
+    fn into(self) -> QubicTxHash {
+        let mut hash = [0; 32];
+        let mut kg = KangarooTwelve::hash(self.encode_as_bytes(), &[]);
+
+        kg.squeeze(&mut hash);
+
+        QubicTxHash(hash)
+    }
+}
+
+impl<T: Copy> Into<QubicTxHash> for Call<T> {
+    fn into(self) -> QubicTxHash {
+        let mut hash = [0; 32];
+        let mut kg = KangarooTwelve::hash(self.encode_as_bytes(), &[]);
+
+        kg.squeeze(&mut hash);
+
+        QubicTxHash(hash)
+    }
+}

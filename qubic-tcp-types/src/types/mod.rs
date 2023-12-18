@@ -5,6 +5,7 @@ pub mod ticks;
 pub mod time;
 pub mod token;
 pub mod assets;
+pub mod special_commands;
 
 use std::net::Ipv4Addr;
 
@@ -108,6 +109,13 @@ pub struct ContractIpo {
 }
 
 set_message_type!(ContractIpo, MessageType::RespondContractIPO);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct ContractIpoBid {
+    pub price: u64,
+    pub quantity: u16
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
