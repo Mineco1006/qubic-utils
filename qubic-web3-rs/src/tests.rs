@@ -1,9 +1,11 @@
-use qubic_tcp_types::{prelude::TransactionFlags, types::ExchangePublicPeers, events::NetworkEvent};
-use qubic_types::QubicId;
+use std::str::FromStr;
+
+use qubic_tcp_types::{prelude::TransactionFlags, types::{ExchangePublicPeers, ticks::TickData}, events::NetworkEvent};
+use qubic_types::{QubicId, QubicTxHash};
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "135.181.246.50:21841";
+const COMPUTOR: &str = "95.156.230.174:21841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
@@ -44,6 +46,29 @@ fn test_tick_transactions() {
     let tick_txns = client.qu().request_tick_transactions(TICK, TransactionFlags::all()).unwrap();
 
     dbg!(tick_txns);
+}
+
+#[test]
+fn test_tick_data() {
+    let client = Client::<Tcp>::new(COMPUTOR);
+
+    let current_tick = client.qu().get_current_tick_info().unwrap();
+
+    dbg!(std::mem::size_of::<TickData>());
+
+    let tick_data = client.qu().request_tick_data(current_tick.tick - 100).unwrap();
+
+    dbg!(tick_data);
+}
+
+#[test]
+fn test_check() {
+    let client = Client::<Tcp>::new(COMPUTOR);
+
+    let tick = 11885253;
+    let hash = QubicTxHash::from_str("fazkeookoirgnemyesoqdkfwhhbbrvhbgnqkwvstidaocuhouprgkwacevsm").unwrap();
+
+    dbg!(client.qu().check_transaction_status(hash, tick).unwrap());
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]

@@ -1,10 +1,11 @@
 [package]
-name = "qubic-computor-rs"
+name = "qubic-spectrum"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-qubic-types = { path = "../qubic-types" }
-qubic-web3-rs = { path = "../qubic-web3-rs" }
+qubic-tcp-types = { path = "../../qubic-utils/qubic-tcp-types" }
+qubic-types = { path = "../../qubic-utils/qubic-types" }
+anyhow = "*"

@@ -1,4 +1,4 @@
-use crate::{types::{BroadcastMessage, ExchangePublicPeers, ContractIpoBid, assets::{TransferAssetOwnershipAndPossessionInput, IssueAssetInput}}, prelude::{Transaction, TickData, FutureTickData, Call}};
+use crate::{types::{BroadcastMessage, ExchangePublicPeers, ContractIpoBid, assets::{TransferAssetOwnershipAndPossessionInput, IssueAssetInput}}, prelude::{Transaction, Tick, TickData, Call}};
 
 
 #[derive(Debug)]
@@ -9,6 +9,6 @@ pub enum NetworkEvent {
     BroadcastQxTransfer(Call<TransferAssetOwnershipAndPossessionInput>),
     BroadcasQxAssetIssuance(Call<IssueAssetInput>),
     BroadcastIpoBid(Call<ContractIpoBid>),
-    BroadcastTick(TickData),
-    BroadcastFutureTick(FutureTickData)
+    BroadcastTick(Tick),
+    BroadcastFutureTick(TickData)
 }

@@ -23,6 +23,10 @@ pub trait Transport {
 
     fn send_with_multiple_responses<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<T>>;
 
+    fn send_with_multiple_raw_responses<D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<Vec<u8>>>;
+
+    fn get_url(&self) -> String;
+ 
     fn connect(&self) -> Result<TcpStream>;
 }
 
@@ -207,6 +211,41 @@ impl Transport for Tcp {
         }
         
         Ok(ret)
+    }
+
+    fn send_with_multiple_raw_responses<D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<Vec<u8>>> {
+        let mut ret: Vec<Vec<u8>> = Vec::new();
+
+        let mut stream = TcpStream::connect(&self.url)?;
+
+        let mut header_buffer = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>()];
+        stream.write_all(data.encode_as_bytes())?;
+        stream.read_exact(&mut header_buffer)?;
+        header_buffer = vec![0; std::mem::size_of::<Header>()];
+
+        loop {
+            stream.read_exact(&mut header_buffer)?;
+
+            let header = unsafe { *(header_buffer.as_ptr() as *const Header) };
+
+
+            if header.message_type == MessageType::EndResponse {
+                break;
+            }
+
+            let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
+
+            
+            stream.read_exact(&mut data_buffer)?;
+
+            ret.push(data_buffer);
+        }
+        
+        Ok(ret)
+    }
+
+    fn get_url(&self) -> String {
+        self.url.clone()
     }
 
     fn connect(&self) -> Result<TcpStream> {

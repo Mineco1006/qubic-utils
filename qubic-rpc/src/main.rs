@@ -5,8 +5,7 @@ use axum::{
     extract::State,
     Router, Json,
 };
-use qubic_types::{QubicWallet, QubicId};
-use qubic_web3_rs::{client::Client, transport::Tcp, qubic_tcp_types::types::transactions::{RawTransaction, Transaction}};
+use qubic_web3_rs::{client::Client, transport::Tcp};
 use qubic_rpc_types::{JsonRpcRequest, JsonRpcResponse, ComputorInfos};
 use axum::http::Method;
 use tower_http::cors::{CorsLayer, Any};
@@ -105,7 +104,8 @@ async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<
 
 #[tokio::test]
 async fn test() {
-    use qubic_types::QubicId;
+    use qubic_types::{QubicWallet, QubicId};
+    use qubic_web3_rs::qubic_tcp_types::types::transactions::{RawTransaction, Transaction};
 
     let client = reqwest::Client::new();
 

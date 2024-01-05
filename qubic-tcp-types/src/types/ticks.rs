@@ -1,8 +1,10 @@
-use qubic_types::{Signature, H256};
+use std::fmt::Debug;
 
-use crate::{MessageType, consts::{NUMBER_OF_TRANSACTION_PER_TICK, NUMBER_OF_COMPUTORS}};
+use qubic_types::{Signature, H256, QubicTxHash};
 
-use super::time::QubicTime;
+use crate::{MessageType, consts::{NUMBER_OF_TRANSACTION_PER_TICK, NUMBER_OF_COMPUTORS, MAX_NUMBER_OF_CONTRACTS}};
+
+use super::{time::QubicTime, special_commands::{Ballot, Proposal}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -30,51 +32,76 @@ pub struct RequestTickData {
 
 set_message_type!(RequestTickData, MessageType::RequestTickData);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy)]
 #[repr(C)]
-pub struct Proposal {
-    pub uri_size: u8,
-    pub uri: [u8; 255]
+pub struct VarStructBuffer([u8; 256]);
+
+#[derive(Debug, Clone, Copy)]
+pub enum BallotOrProposal {
+    Ballot(Ballot),
+    Proposal(Proposal)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub struct Ballot {
-    pub zero: u16,
-    pub votes: [u8; (NUMBER_OF_COMPUTORS * 3 + 7)/8],
-    pub quasi_random_number: u8
+impl Into<BallotOrProposal> for &VarStructBuffer {
+    fn into(self) -> BallotOrProposal {
+        match self.0[0] {
+            0 => {
+                let ballot = Ballot {
+                    zero: 0,
+                    votes: self.0[1..255].try_into().unwrap(),
+                    quasi_random_number: self.0[255]
+                };
+
+                BallotOrProposal::Ballot(ballot)
+            },
+            _ => {
+                let proposal = Proposal {
+                    uri_size: self.0[0],
+                    uri: self.0[1..].try_into().unwrap()
+                };
+
+                BallotOrProposal::Proposal(proposal)
+            }
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
-pub struct VarStruct {
-    pub proposal: Proposal,
-    pub ballot: Ballot
+impl Debug for VarStructBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bop: BallotOrProposal = self.into();
+        write!(f, "{bop:?}")
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct FutureTickData {
+pub struct TickData {
     pub computor_index: u16,
     pub epoch: u16,
     pub tick: u32,
 
     pub time: QubicTime,
 
-    pub var_struct: VarStruct,
+    var_struct: VarStructBuffer,
 
     pub time_lock: [u8; 32],
-    pub transaction_digest: [H256; NUMBER_OF_TRANSACTION_PER_TICK],
-    pub contract_fees: [u64; 1024],
+    pub transaction_digest: [QubicTxHash; NUMBER_OF_TRANSACTION_PER_TICK],
+    pub contract_fees: [u64; MAX_NUMBER_OF_CONTRACTS],
 
     pub signature: Signature
 }
 
-set_message_type!(FutureTickData, MessageType::BroadcastFutureTickData);
+impl TickData {
+    pub fn get_var_struct(&self) -> BallotOrProposal {
+        (&self.var_struct).into()
+    }
+}
+
+set_message_type!(TickData, MessageType::BroadcastFutureTickData);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct TickData {
+pub struct Tick {
     pub computor_index: u16,
     pub epoch: u16,
     pub tick: u32,
@@ -96,7 +123,7 @@ pub struct TickData {
     pub signature: Signature
 }
 
-set_message_type!(TickData, MessageType::BroadcastTick);
+set_message_type!(Tick, MessageType::BroadcastTick);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]

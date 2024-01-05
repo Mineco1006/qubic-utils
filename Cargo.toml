@@ -8,7 +8,7 @@ members = [
     "qubic-rpc-types",
     "qubic-rpc",
     "vanity-id-generator",
-    "qubic-computor-rs",
+    "qubic-spectrum"
 ]
 
 [profile.dev]

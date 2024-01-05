@@ -60,6 +60,14 @@ pub struct Qu<'a, T: Transport> {
     transport: &'a T
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum TransactionStatus {
+    Failed,
+    Included,
+    Executed
+}
+
 pub const NUMBER_OF_EXCHANGES_PEERS: usize = 4;
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -145,7 +153,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet)?)
     }
 
-    pub fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<TickData> {
+    pub fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<Tick> {
         let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
         
         Ok(self.transport.send_with_response(packet)?)
@@ -163,115 +171,156 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_multiple_responses(packet)?)
     }
 
+    pub fn check_transaction_status(&self, tx_hash: QubicTxHash, tick: u32) -> Result<TransactionStatus> {
+        let mut status = TransactionStatus::Failed;
+
+        let tt_packet = Packet::new(RequestedTickTransactions { tick, flags: TransactionFlags::all() }, true);
+        let tt = self.transport.send_with_multiple_raw_responses(tt_packet)?;
+
+        for tx in tt {
+            let mut digest = QubicTxHash::default();
+            let mut kg = KangarooTwelve::hash(&tx, &[]);
+            kg.squeeze(&mut digest.0);
+            if digest == tx_hash {
+                println!("Included");
+                status = TransactionStatus::Included;
+                break;
+            }
+        }
+
+        let td = self.request_tick_data(tick)?;
+
+        for executed_tx_hash in td.transaction_digest {
+            if executed_tx_hash == tx_hash {
+                println!("Executed");
+                status = TransactionStatus::Executed;
+                break;
+            }
+        }
+        
+        Ok(status)
+    }
+
     pub fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()> 
         where F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static
     {
-        let stream = self.transport.connect()?;
+        let url = self.transport.get_url();
         let _: JoinHandle<Result<()>> = std::thread::Builder::new().name("qubic-event-handler".to_string()).stack_size(10_000_000).spawn(move || {
             let event_handler = event_handler;
-            let mut stream = stream;
+            let url = url;
+            let transport = T::new(url.clone());
+            
             let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
             let mut data_buffer = vec![0u8; 10_000_000];
-            stream.write_all(Packet::new(public_peers, true).encode_as_bytes())?;
+            
 
-            loop {
-                stream.read_exact(&mut header_buffer)?;
+            'connection: loop {
+                let mut stream = transport.connect()?;
+                stream.write_all(Packet::new(public_peers, true).encode_as_bytes())?;
+                loop {
+                    match stream.read_exact(&mut header_buffer) {
+                        Err(_) => continue 'connection,
+                        _ => ()
+                    };
 
-                let header = unsafe {
-                    read_unaligned(header_buffer.as_ptr() as *const Header)
-                };
+                    let header = unsafe {
+                        read_unaligned(header_buffer.as_ptr() as *const Header)
+                    };
 
-                stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())])?;
+                    match stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())]) {
+                        Err(_) => continue 'connection,
+                        _ => ()
+                    };
 
+                    match header.message_type {
+                        MessageType::ExchangePublicPeers => {
+                            event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
+                        },
+                        MessageType::BroadcastMessage => {
+                            
+                            event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
+                        },
+                        MessageType::BroadcastTransaction => {
+                            let tx = unsafe { read_unaligned(data_buffer.as_ptr() as *const RawTransaction) };
 
+                            if tx.input_type == 0 && tx.input_size == 0 {
+                                let tx = Transaction {
+                                    raw_transaction: tx,
+                                    signature: unsafe { read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const Signature) }
+                                };
+                                event_handler(NetworkEvent::BroadcastTransaction(tx))?;
+                            } else {
+                                match tx.input_type {
+                                    0 => {
+                                        let input = unsafe {
+                                            read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const ContractIpoBid)
+                                        };
+                                        let signature = unsafe {
+                                            read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
+                                        };
 
-                match header.message_type {
-                    MessageType::ExchangePublicPeers => {
-                        event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
-                    },
-                    MessageType::BroadcastMessage => {
-                        
-                        event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
-                    },
-                    MessageType::BroadcastTransaction => {
-                        let tx = unsafe { read_unaligned(data_buffer.as_ptr() as *const RawTransaction) };
+                                        let call = Call {
+                                            raw_call: RawCall {
+                                                tx,
+                                                input
+                                            },
+                                            signature
+                                        };
 
-                        if tx.input_type == 0 && tx.input_size == 0 {
-                            let tx = Transaction {
-                                raw_transaction: tx,
-                                signature: unsafe { read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const Signature) }
-                            };
-                            event_handler(NetworkEvent::BroadcastTransaction(tx))?;
-                        } else {
-                            match tx.input_type {
-                                0 => {
-                                    let input = unsafe {
-                                        read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const ContractIpoBid)
-                                    };
-                                    let signature = unsafe {
-                                        read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
-                                    };
+                                        event_handler(NetworkEvent::BroadcastIpoBid(call))?;
+                                    },
+                                    1 => {
+                                        let input = unsafe {
+                                            read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const IssueAssetInput)
+                                        };
+                                        let signature = unsafe {
+                                            read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
+                                        };
 
-                                    let call = Call {
-                                        raw_call: RawCall {
-                                            tx,
-                                            input
-                                        },
-                                        signature
-                                    };
+                                        let call = Call {
+                                            raw_call: RawCall {
+                                                tx,
+                                                input
+                                            },
+                                            signature
+                                        };
 
-                                    event_handler(NetworkEvent::BroadcastIpoBid(call))?;
-                                },
-                                1 => {
-                                    let input = unsafe {
-                                        read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const IssueAssetInput)
-                                    };
-                                    let signature = unsafe {
-                                        read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
-                                    };
+                                        event_handler(NetworkEvent::BroadcasQxAssetIssuance(call))?;
+                                    },
+                                    2 => {
+                                        let input = unsafe {
+                                            read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const TransferAssetOwnershipAndPossessionInput)
+                                        };
+                                        let signature = unsafe {
+                                            read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
+                                        };
 
-                                    let call = Call {
-                                        raw_call: RawCall {
-                                            tx,
-                                            input
-                                        },
-                                        signature
-                                    };
+                                        let call = Call {
+                                            raw_call: RawCall {
+                                                tx,
+                                                input
+                                            },
+                                            signature
+                                        };
 
-                                    event_handler(NetworkEvent::BroadcasQxAssetIssuance(call))?;
-                                },
-                                2 => {
-                                    let input = unsafe {
-                                        read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const TransferAssetOwnershipAndPossessionInput)
-                                    };
-                                    let signature = unsafe {
-                                        read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
-                                    };
-
-                                    let call = Call {
-                                        raw_call: RawCall {
-                                            tx,
-                                            input
-                                        },
-                                        signature
-                                    };
-
-                                    event_handler(NetworkEvent::BroadcastQxTransfer(call))?;
+                                        event_handler(NetworkEvent::BroadcastQxTransfer(call))?;
+                                    }
+                                    _ => ()
                                 }
-                                _ => ()
                             }
+                            
+                        },
+                        MessageType::BroadcastTick => {
+                            event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;
+                        },
+                        MessageType::BroadcastFutureTickData => {
+                            event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
                         }
-                        
-                    },
-                    MessageType::BroadcastTick => {
-                        event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
-                    },
-                    MessageType::BroadcastFutureTickData => {
-                        event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const FutureTickData) }))?;
+                        _ => ()
                     }
-                    _ => ()
                 }
             }
+            
         })?;
         
         Ok(())
@@ -510,13 +559,13 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet).await?)
     }
 
-    pub async fn request_tick_data(&self, tick: u32) -> Result<TickData> {
+    pub async fn request_tick_data(&self, tick: u32) -> Result<Tick> {
         let packet = Packet::new(RequestTickData { tick }, true);
     
         Ok(self.transport.send_with_response(packet).await?)
     }
 
-    pub async fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<TickData> {
+    pub async fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<Tick> {
         let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
         
         Ok(self.transport.send_with_response(packet).await?)
@@ -567,10 +616,10 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                         event_handler(NetworkEvent::BroadcastTransaction(unsafe { read_unaligned(data_buffer.as_ptr() as *const Transaction) }))?;
                     },
                     MessageType::BroadcastTick => {
-                        event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
+                        event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;
                     },
                     MessageType::BroadcastFutureTickData => {
-                        event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const FutureTickData) }))?;
+                        event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
                     }
                     _ => ()
                 }
