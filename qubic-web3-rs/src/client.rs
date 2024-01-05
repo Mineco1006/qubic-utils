@@ -182,7 +182,6 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             let mut kg = KangarooTwelve::hash(&tx, &[]);
             kg.squeeze(&mut digest.0);
             if digest == tx_hash {
-                println!("Included");
                 status = TransactionStatus::Included;
                 break;
             }
@@ -192,7 +191,6 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
         for executed_tx_hash in td.transaction_digest {
             if executed_tx_hash == tx_hash {
-                println!("Executed");
                 status = TransactionStatus::Executed;
                 break;
             }
