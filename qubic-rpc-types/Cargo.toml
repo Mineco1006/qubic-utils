@@ -10,3 +10,6 @@ serde = { version = "*", features = ["derive"] }
 qubic-types = { path = "../qubic-types", features = ["serde"]}
 qubic-tcp-types = { path = "../qubic-tcp-types", features = ["serde"]}
 hex = "*"
+
+[dev-dependencies]
+serde_json = "*"

@@ -9,7 +9,7 @@ pub mod special_commands;
 
 use std::net::Ipv4Addr;
 
-use qubic_types::{QubicId, Signature, Nonce};
+use qubic_types::{QubicId, Signature, Nonce, traits::ToBytes};
 
 use crate::{utils::QubicRequest, Header, MessageType};
 
@@ -134,9 +134,9 @@ impl Default for ExchangePublicPeers {
 set_message_type!(ExchangePublicPeers, MessageType::ExchangePublicPeers);
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 #[repr(C)]
-pub struct Packet<T: Sized> {
+pub struct Packet<T> {
     header: Header,
     pub data: T
 }
@@ -144,8 +144,18 @@ pub struct Packet<T: Sized> {
 impl<T: Sized + QubicRequest> Packet<T> {
     pub fn new(data: T, randomize_dejavu: bool) -> Packet<T> {
         Self {
-            header: Header::new(std::mem::size_of::<Header>() + std::mem::size_of::<T>(), T::get_message_type(), randomize_dejavu),
+            header: Header::new(std::mem::size_of::<Header>() + std::mem::size_of_val(&data), T::get_message_type(), randomize_dejavu),
             data
         }
+    }
+}
+
+impl<T: ToBytes> ToBytes for Packet<T> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = self.header.to_bytes();
+
+        buffer.extend(self.data.to_bytes());
+        
+        buffer
     }
 }

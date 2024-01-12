@@ -1,4 +1,4 @@
-#![feature(impl_trait_in_assoc_type)]
+#![feature(slice_flatten)]
 
 pub mod transport;
 pub mod client;

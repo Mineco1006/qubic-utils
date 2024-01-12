@@ -6,7 +6,7 @@ use std::{ptr::copy_nonoverlapping, fmt::{Debug, Display}, str::FromStr};
 use four_q::{types::PointAffine, ops::{ecc_mul_fixed, encode, decode, ecc_mul, montgomery_multiply_mod_order, ecc_mul_double}, consts::{MONTGOMERY_R_PRIME, ONE, CURVE_ORDER_0, CURVE_ORDER_1, CURVE_ORDER_3, CURVE_ORDER_2}};
 use kangarootwelve::KangarooTwelve;
 
-use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::AsByteEncoded, Nonce, QubicTxHash};
+use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::ToBytes, Nonce, QubicTxHash};
 
 fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
     #[cfg(target_arch = "x86_64")]
@@ -149,9 +149,9 @@ impl QubicId {
     /// id.verify(message, SIGNATURE);
     /// ```
     #[inline]
-    pub fn verify<T: AsByteEncoded>(&self, message: T, signature: Signature) -> bool {
+    pub fn verify<T: ToBytes>(&self, message: T, signature: Signature) -> bool {
         let mut digest: [u8; 32] = [0; 32];
-        let mut kg = KangarooTwelve::hash(message.encode_as_bytes(), &[]);
+        let mut kg = KangarooTwelve::hash(&message.to_bytes(), &[]);
 
         kg.squeeze(&mut digest);
 
@@ -351,9 +351,9 @@ impl QubicWallet {
     /// 
     /// let signature = wallet.sign(message);
     /// ```
-    pub fn sign<T: AsByteEncoded>(&self, message: T) -> Signature {
+    pub fn sign<T: ToBytes>(&self, message: T) -> Signature {
         let mut message_digest = [0; 32];
-        let mut kg = KangarooTwelve::hash(message.encode_as_bytes(), &[]);
+        let mut kg = KangarooTwelve::hash(&message.to_bytes(), &[]);
         kg.squeeze(&mut message_digest);
 
         self.sign_raw(message_digest)

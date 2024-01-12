@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "four-q-rs",
-    "kangarootwelve64to32",
     "qubic-web3-rs",
     "qubic-types",
     "qubic-tcp-types",

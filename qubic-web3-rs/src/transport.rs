@@ -1,4 +1,5 @@
 
+use std::time::Duration;
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{net::TcpStream, io::{Write, Read}};
 
@@ -8,7 +9,7 @@ use tokio::net::TcpStream;
 use anyhow::{Result, Ok};
 
 use qubic_tcp_types::{Header, types::{Packet, ExchangePublicPeers}, MessageType, utils::QubicRequest};
-use qubic_types::traits::AsByteEncoded;
+use qubic_types::traits::{ToBytes, FromBytes};
 
 #[cfg(any(feature = "async", feature = "http"))]
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
@@ -17,13 +18,13 @@ use tokio::io::{AsyncWriteExt, AsyncReadExt};
 pub trait Transport {
     fn new(url: String) -> Self;
 
-    fn send_without_response(&self, data: impl AsByteEncoded) -> Result<()>;
+    fn send_without_response(&self, data: impl ToBytes) -> Result<()>;
 
-    fn send_with_response<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<T>;
+    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T>;
 
-    fn send_with_multiple_responses<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<T>>;
+    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>>;
 
-    fn send_with_multiple_raw_responses<D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<Vec<u8>>>;
+    fn send_with_multiple_raw_responses<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<Vec<u8>>>;
 
     fn get_url(&self) -> String;
  
@@ -35,7 +36,7 @@ pub trait Transport {
 pub trait Transport {
     async fn new(url: String) -> Self;
 
-    async fn send_without_response<B: AsByteEncoded + Send>(&self, data: B) -> Result<()>;
+    async fn send_without_response<B: ToBytes + Send>(&self, data: B) -> Result<()>;
 
     async fn send_with_response<T: Copy, D: QubicRequest + Send>(&self, data: Packet<D>) -> Result<T>;
 
@@ -58,7 +59,7 @@ impl Transport for Tcp {
         }
     }
 
-    async fn send_without_response<B: AsByteEncoded + Send>(&self, data: B) -> Result<()> {
+    async fn send_without_response<B: ToBytes + Send>(&self, data: B) -> Result<()> {
         use tokio::net::TcpStream;
 
         let mut stream = TcpStream::connect(&self.url).await?;
@@ -143,46 +144,62 @@ impl Transport for Tcp {
         }
     }
 
-    fn send_without_response(&self, data: impl AsByteEncoded) -> Result<()> {
+    fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
         let mut stream = TcpStream::connect(&self.url)?;
+        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
-        stream.write_all(data.encode_as_bytes())?;
+        stream.write_all(&data.to_bytes())?;
 
         Ok(())
     }
 
-    // handle unfulfilled repsonses
-    fn send_with_response<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<T> {
+    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T> {
         let mut stream = TcpStream::connect(&self.url)?;
 
-        let mut buf = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>() + std::mem::size_of::<Packet<T>>()];
-        stream.write_all(data.encode_as_bytes())?;
+        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
-        stream.read_exact(&mut buf)?;
+        let mut header_buffer = vec![0; std::mem::size_of::<Header>()];
+        stream.write_all(&data.to_bytes())?;
 
-        let header = unsafe { *(buf.as_ptr() as *const Header) };
+        stream.read_exact(&mut header_buffer)?;
 
-        let offset = if header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers { std::mem::size_of::<Packet<ExchangePublicPeers>>() as isize } else { 0 };
+        let mut header = Header::from_bytes(&header_buffer)?;
 
-        let _header = unsafe { *(buf.as_ptr().offset(offset) as *const Header) };
+        let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
 
-        let res = unsafe {
-            std::ptr::read_unaligned(buf.as_ptr().offset(offset + std::mem::size_of::<Header>() as isize) as *const T)
-        };
+        if offset {
+            let mut flush_buf = vec![0; header.get_size() - std::mem::size_of::<Header>()];
+
+            stream.read_exact(&mut flush_buf)?;
+            drop(flush_buf);
+
+            stream.read_exact(&mut header_buffer)?;
+
+            header = Header::from_bytes(&header_buffer)?;
+        }
+
+        let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
+
+        stream.read_exact(&mut data_buffer)?;
+
+        let res = T::from_bytes(&data_buffer)?;
 
         Ok(res)
     }
 
-    fn send_with_multiple_responses<T: Copy, D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<T>> {
+    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>> {
         let mut ret: Vec<T> = Vec::new();
 
         let mut stream = TcpStream::connect(&self.url)?;
 
+        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+
         let mut header_buffer = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>()];
-        stream.write_all(data.encode_as_bytes())?;
+        stream.write_all(&data.to_bytes())?;
         stream.read_exact(&mut header_buffer)?;
         header_buffer = vec![0; std::mem::size_of::<Header>()];
-        let mut data_buffer = vec![0; std::mem::size_of::<T>()];
 
         loop {
             stream.read_exact(&mut header_buffer)?;
@@ -194,39 +211,36 @@ impl Transport for Tcp {
                 break;
             }
 
+            let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
+
             
             stream.read_exact(&mut data_buffer)?;
 
-            let res = unsafe {
-                std::ptr::read_unaligned(data_buffer.as_ptr() as *const T)
-            };
+            let res = T::from_bytes(&data_buffer)?;
 
             ret.push(res);
-
-            let size = header.get_size() - std::mem::size_of::<Header>() - std::mem::size_of::<T>();
-
-            if size > 0 {
-                stream.read_exact(&mut vec![0; size])?;
-            }
         }
         
         Ok(ret)
     }
 
-    fn send_with_multiple_raw_responses<D: QubicRequest>(&self, data: Packet<D>) -> Result<Vec<Vec<u8>>> {
+    fn send_with_multiple_raw_responses<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<Vec<u8>>> {
         let mut ret: Vec<Vec<u8>> = Vec::new();
 
         let mut stream = TcpStream::connect(&self.url)?;
 
+        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        
         let mut header_buffer = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>()];
-        stream.write_all(data.encode_as_bytes())?;
+        stream.write_all(&data.to_bytes())?;
         stream.read_exact(&mut header_buffer)?;
         header_buffer = vec![0; std::mem::size_of::<Header>()];
 
         loop {
             stream.read_exact(&mut header_buffer)?;
 
-            let header = unsafe { *(header_buffer.as_ptr() as *const Header) };
+            let header = Header::from_bytes(&header_buffer)?;
 
 
             if header.message_type == MessageType::EndResponse {

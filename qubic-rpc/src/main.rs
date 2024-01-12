@@ -5,8 +5,8 @@ use axum::{
     extract::State,
     Router, Json,
 };
-use qubic_web3_rs::{client::Client, transport::Tcp};
-use qubic_rpc_types::{JsonRpcRequest, JsonRpcResponse, ComputorInfos};
+use qubic_web3_rs::{client::Client, transport::Tcp, qubic_tcp_types::types::transactions::TransactionFlags};
+use qubic_rpc_types::{QubicJsonRpcRequest, QubicJsonRpcResponse, ResponseType, RequestError, RequestMethods, RequestResults};
 use axum::http::Method;
 use tower_http::cors::{CorsLayer, Any};
 use clap::Parser;
@@ -21,7 +21,7 @@ struct Args {
     port: String,
 
     /// Computor to send requests
-    #[arg(short, long, default_value = "167.235.118.235:21841")]
+    #[arg(short, long, default_value = "95.156.230.174:21841")]
     computor: String
 }
 
@@ -47,106 +47,92 @@ async fn main() {
         .unwrap();
 }
 
-async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<JsonRpcRequest>) -> Json<JsonRpcResponse> {
+macro_rules! result_or_501 {
+    ($handle: expr, $rpc_method: expr) => {
+        match $handle {
+            Ok(res) => res,
+            Err(_) => {
+                return Json(QubicJsonRpcResponse {
+                    jsonrpc: "2.0".to_owned(),
+                    id: $rpc_method.id,
+                    response: ResponseType::Error(RequestError { method: $rpc_method.request.get_method(), error: "InternalServerError".to_owned() })
+                })
+            }
+        }
+    };
+}
+
+macro_rules! early_return_result {
+    ($res_type: expr, $rpc_method: expr) => {
+        return Json(QubicJsonRpcResponse {
+            jsonrpc: "2.0".to_owned(),
+            id: $rpc_method.id,
+            response: ResponseType::Result($res_type)
+        })
+    };
+}
+
+async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<QubicJsonRpcRequest>) -> Json<QubicJsonRpcResponse> {
     info!("Incoming request: {rpc_method:?}");
-    if !rpc_method.is_version_2() {
-        let res = rpc_method.init_error(Some("Invalid JSON-RPC version!".to_string()));
-        return Json(res);
+
+    if rpc_method.jsonrpc.as_str() != "2.0" {
+        return Json(QubicJsonRpcResponse {
+            jsonrpc: "2.0".to_owned(),
+            id: rpc_method.id,
+            response: ResponseType::Error(RequestError { method: rpc_method.request.get_method(), error: "Invalid JSON-RPC version found".to_owned() })
+        })
     }
 
     let client = Client::<Tcp>::new(&state.computor);
 
-    match &rpc_method {
-        JsonRpcRequest::RequestCurrentTickInfo { jsonrpc: _, id } => {
-            let res = match client.qu().get_current_tick_info() {
-                Ok(r) => r,
-                Err(_) => return Json(rpc_method.init_error(Some("Internal Server Error".to_string())))
-            };
+    match rpc_method.request {
+        RequestMethods::RequestComputors => {
+            let res = result_or_501!(client.qu().request_computors(), rpc_method);
 
-            Json(JsonRpcResponse::RequestCurrentTickInfo { jsonrpc: "2.0".to_string(), id: *id, result: Some(res), error: None })
+            early_return_result!(RequestResults::RequestComputors(res.into()), rpc_method);
         },
-        JsonRpcRequest::RequestEntity { jsonrpc: _, id, params } => {
-            let res = match client.qu().request_entity(*params) {
-                Ok(r) => r,
-                Err(_) => return Json(rpc_method.init_error(Some("Internal Server Error".to_string())))
-            };
+        RequestMethods::RequestCurrentTickInfo => {
+            let res = result_or_501!(client.qu().get_current_tick_info(), rpc_method);
 
-            Json(JsonRpcResponse::RequestEntity { jsonrpc: "2.0".to_string(), id: *id, result: Some(res), error: None })
+            early_return_result!(RequestResults::RequestCurrentTickInfo(res), rpc_method);
         },
-        JsonRpcRequest::SendTransaction { jsonrpc: _, id: _, params } => {
-            match client.qu().send_signed_transaction(*params) {
-                Ok(_) => {
-                    Json(rpc_method.init_error(None))
-                },
-                Err(e) => {
-                    error!("{e:?}");
-                    Json(rpc_method.init_error(Some("Internal Server Error".to_string())))
-                }
-            }
-        }
-        JsonRpcRequest::RequestComputors { jsonrpc: _, id } => {
-            match client.qu().request_computors() {
-                Ok(r) => {
-                    let r: ComputorInfos = r.into();
-                    Json(JsonRpcResponse::RequestComputors { jsonrpc: "2.0".to_string(), id: *id, result: Some(r), error: None })
-                },
-                Err(_) => Json(rpc_method.init_error(Some("Internal Server Error".to_string())))
-            }
+        RequestMethods::RequestEntity(id) => {
+            let res = result_or_501!(client.qu().request_entity(id), rpc_method);
+
+            early_return_result!(RequestResults::RequestEntity(res), rpc_method);
         },
-        JsonRpcRequest::RequestContractIpo { jsonrpc: _, id: _, params: _ } => {
-            Json(rpc_method.init_error(Some("Not yet implemented!".to_string())))
+        RequestMethods::SendTransaction(tx) => {
+            result_or_501!(client.qu().send_signed_transaction(tx), rpc_method);
+
+            early_return_result!(RequestResults::SendTransaction(tx.into()), rpc_method);
         },
-        JsonRpcRequest::RequestTickData { jsonrpc: _, id: _, params: _ } => {
-            Json(rpc_method.init_error(Some("Not yet implemented!".to_string())))
+        RequestMethods::RequestTickTransactions(tick) => {
+            let res = result_or_501!(client.qu().request_tick_transactions(tick, TransactionFlags::all()), rpc_method);
+
+            early_return_result!(RequestResults::RequestTickTransactions(res), rpc_method);
         }
     }
 }
 
 #[tokio::test]
 async fn test() {
-    use qubic_types::{QubicWallet, QubicId};
-    use qubic_web3_rs::qubic_tcp_types::types::transactions::{RawTransaction, Transaction};
+    use qubic_types::QubicId;
+    const RPC: &str = "http://127.0.0.1:2003/";
 
     let client = reqwest::Client::new();
-
-    let req = JsonRpcRequest::RequestCurrentTickInfo { jsonrpc: "2.0".to_string(), id: 0 };
-
-    let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
-
-    if let JsonRpcResponse::RequestCurrentTickInfo { jsonrpc: _, id: _, result, error: _ } = res {
-        let result = result.unwrap();
-        let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
-
-        let raw_tx = RawTransaction {
-            from: wallet.public_key,
-            to: QubicId::default(),
-            amount: 0,
-            tick: result.tick + 20,
-            input_size: 0,
-            input_type: 0
-        };
-
-        let sig = wallet.sign(raw_tx);
-
-        let req = JsonRpcRequest::SendTransaction { jsonrpc: "2.0".to_string(), id: 0, params: Transaction { raw_transaction: raw_tx, signature: sig } };
-
-        let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
-
-        dbg!(res);
-    }
-
-    let id = QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap();
-    let req = JsonRpcRequest::RequestEntity { jsonrpc: "2.0".to_string(), id: 0, params: id };
-
-    let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
-
+    let request = QubicJsonRpcRequest::new(0, RequestMethods::RequestEntity(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()));
+    let res: QubicJsonRpcResponse = client.post(RPC).json(&request).send().await.unwrap().json().await.unwrap();
     dbg!(res);
 
-    
+    let request = QubicJsonRpcRequest::new(0, RequestMethods::RequestCurrentTickInfo);
+    let res: QubicJsonRpcResponse = client.post(RPC).json(&request).send().await.unwrap().json().await.unwrap();
+    dbg!(&res);
 
-    /*let req = JsonRpcRequest::RequestComputors { jsonrpc: "2.0".to_string(), id: 0 };
-
-    let res: JsonRpcResponse = client.post("http://127.0.0.1:2003").json(&req).send().await.unwrap().json().await.unwrap();
-
-    dbg!(res);*/
+    if let ResponseType::Result(r) = res.response {
+        if let RequestResults::RequestCurrentTickInfo(current_tick) = r {
+            let request = QubicJsonRpcRequest::new(0, RequestMethods::RequestTickTransactions(current_tick.tick - 10));
+            let res: QubicJsonRpcResponse = client.post(RPC).json(&request).send().await.unwrap().json().await.unwrap();
+            dbg!(&res);
+        }
+    }
 }

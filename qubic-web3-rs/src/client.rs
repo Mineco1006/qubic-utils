@@ -1,4 +1,4 @@
-use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr, str::FromStr};
+use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr, str::FromStr, time::Duration};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{thread::JoinHandle, io::{Write, Read}};
@@ -8,7 +8,7 @@ use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Comput
 use qubic_tcp_types::prelude::*;
 use anyhow::{Result, Ok};
 use kangarootwelve::KangarooTwelve;
-use qubic_types::{QubicWallet, QubicId, traits::AsByteEncoded, Signature, QubicTxHash};
+use qubic_types::{QubicWallet, QubicId, traits::{ToBytes, FromBytes}, Signature, QubicTxHash};
 use rand::Rng;
 
 #[cfg(any(feature = "async", feature = "http"))]
@@ -92,13 +92,16 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let mut rng = rand::thread_rng();
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
-        let mut gamming_key = [0u64; 4];
+        let mut gamming_key: [u64; 4];
         
         loop {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
                 copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
-                kangarootwelve64to32::kangarootwelve64to32(&shared_key_and_gamming_nonce, &mut gamming_key);
+                let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().flatten(), &[]);
+                let mut gk = [0; 32];
+                kg.squeeze(&mut gk);
+                gamming_key = std::array::from_fn(|i| u64::from_le_bytes(gk[i*8..i*8 + 8].try_into().unwrap()));
             }
 
             if gamming_key[0] & 0xFF == 0 {
@@ -165,7 +168,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet)?)
     }
 
-    pub fn request_tick_transactions(&self, tick: u32, flags: TransactionFlags) -> Result<Vec<Transaction>> {
+    pub fn request_tick_transactions(&self, tick: u32, flags: TransactionFlags) -> Result<Vec<TransactionWithData>> {
         let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
 
         Ok(self.transport.send_with_multiple_responses(packet)?)
@@ -214,7 +217,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
             'connection: loop {
                 let mut stream = transport.connect()?;
-                stream.write_all(Packet::new(public_peers, true).encode_as_bytes())?;
+                stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+                stream.write_all(&Packet::new(public_peers, true).to_bytes())?;
                 loop {
                     match stream.read_exact(&mut header_buffer) {
                         Err(_) => continue 'connection,
@@ -239,74 +243,9 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                             event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
                         },
                         MessageType::BroadcastTransaction => {
-                            let tx = unsafe { read_unaligned(data_buffer.as_ptr() as *const RawTransaction) };
+                            let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()])?;
 
-                            if tx.input_type == 0 && tx.input_size == 0 {
-                                let tx = Transaction {
-                                    raw_transaction: tx,
-                                    signature: unsafe { read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const Signature) }
-                                };
-                                event_handler(NetworkEvent::BroadcastTransaction(tx))?;
-                            } else {
-                                match tx.input_type {
-                                    0 => {
-                                        let input = unsafe {
-                                            read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const ContractIpoBid)
-                                        };
-                                        let signature = unsafe {
-                                            read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
-                                        };
-
-                                        let call = Call {
-                                            raw_call: RawCall {
-                                                tx,
-                                                input
-                                            },
-                                            signature
-                                        };
-
-                                        event_handler(NetworkEvent::BroadcastIpoBid(call))?;
-                                    },
-                                    1 => {
-                                        let input = unsafe {
-                                            read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const IssueAssetInput)
-                                        };
-                                        let signature = unsafe {
-                                            read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
-                                        };
-
-                                        let call = Call {
-                                            raw_call: RawCall {
-                                                tx,
-                                                input
-                                            },
-                                            signature
-                                        };
-
-                                        event_handler(NetworkEvent::BroadcasQxAssetIssuance(call))?;
-                                    },
-                                    2 => {
-                                        let input = unsafe {
-                                            read_unaligned(data_buffer.as_ptr().offset(std::mem::size_of::<RawTransaction>() as isize) as *const TransferAssetOwnershipAndPossessionInput)
-                                        };
-                                        let signature = unsafe {
-                                            read_unaligned(data_buffer.as_ptr().offset(header.get_size() as isize - std::mem::size_of::<Signature>() as isize) as *const Signature)
-                                        };
-
-                                        let call = Call {
-                                            raw_call: RawCall {
-                                                tx,
-                                                input
-                                            },
-                                            signature
-                                        };
-
-                                        event_handler(NetworkEvent::BroadcastQxTransfer(call))?;
-                                    }
-                                    _ => ()
-                                }
-                            }
-                            
+                            event_handler(NetworkEvent::BroadcastTransaction(tx))?;
                         },
                         MessageType::BroadcastTick => {
                             event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;

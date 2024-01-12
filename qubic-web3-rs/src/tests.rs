@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use qubic_tcp_types::{prelude::TransactionFlags, types::{ExchangePublicPeers, ticks::TickData}, events::NetworkEvent};
 use qubic_types::{QubicId, QubicTxHash};
+use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
@@ -36,14 +37,18 @@ fn test() {
     dbg!(tx);
 }
 
-const TICK: u32 = 10422573;
-
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_tick_transactions() {
     let client = Client::<Tcp>::new(COMPUTOR);
 
-    let tick_txns = client.qu().request_tick_transactions(TICK, TransactionFlags::all()).unwrap();
+    let current_tick = client.qu().get_current_tick_info().unwrap();
+
+    let tick_txns = client.qu().request_tick_transactions(current_tick.tick - 10, TransactionFlags::all()).unwrap();
+
+    for tx in &tick_txns {
+        assert!(tx.verify());
+    }
 
     dbg!(tick_txns);
 }
