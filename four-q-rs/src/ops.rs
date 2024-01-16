@@ -33,6 +33,7 @@ use crate::{
         C_PHI_9, ELL_1, ELL_2, ELL_3, ELL_4, B11, B21, B31, B41, B12, B22, B23, B24, B32, B33, B34, B13, B14, B43, B44, B42, C1, C2, C3, C4, DOUBLE_SCALAR_TABLE, PARAMETER_D, C_PSI_2, C_PSI_1, C_PSI_3, C_PSI_4
     }};
 
+#[inline(always)]
 fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
     #[cfg(target_arch = "x86_64")]
     unsafe {
@@ -50,6 +51,7 @@ fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
     }
 }
 
+#[inline(always)]
 fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
     #[cfg(target_arch = "x86_64")]
     unsafe {
