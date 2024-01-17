@@ -3,38 +3,39 @@ use std::{time::Instant, thread::JoinHandle};
 use crossbeam_channel::{unbounded, Sender};
 use qubic_types::QubicWallet;
 use rand::Rng;
-use structopt::StructOpt;
+use clap::Parser;
 
 #[macro_use]
 extern crate log;
 
-#[derive(Debug, StructOpt)]
-struct Opt {
+#[derive(Debug, Parser)]
+struct Args {
     
-    #[structopt(short="t", long)]
+    #[arg(short, long)]
     threads: usize,
 
-    #[structopt(short="m", long="match")]
-    match_value: String
+    #[arg(short, long)]
+    prefix: String
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::new().filter_level(log::LevelFilter::Info).init();
-    let opt = Opt::from_args();
+    let opt = Args::parse();
     let (tx, rx) = unbounded::<Update>();
 
-    info!("Looking for an ID matching {}", opt.match_value);
-    let expected = (26f64).powi(opt.match_value.len() as i32);
+    info!("Looking for an ID matching {}", opt.prefix);
+    let expected = (26f64).powi(opt.prefix.len() as i32);
     info!("Expected iterations required: {}", expected);
     
     let mut now = Instant::now();
     info!("Starting {} worker threads", opt.threads);
-    let _ = start_threads(opt.threads, opt.match_value, tx);
+    let _ = start_threads(opt.threads, opt.prefix, tx);
 
     let mut total = 0;
     let mut im = 0;
 
     'outer: loop {
+        std::thread::sleep(std::time::Duration::from_secs(3));
         if !rx.is_empty() {
             while !rx.is_empty() {
                 let recv = rx.recv().unwrap();
@@ -45,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         break 'outer;
                     },
-                    Update::Sims(sims) => {
+                    Update::Checks(sims) => {
                         total += sims;
                         im += sims;
                     } 
@@ -53,19 +54,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        info!("Expected Progress: {:.2}% | Checkrate: {:.2} ch/s", (total as f64/expected), (im * 1000) as f64 / now.elapsed().as_millis() as f64);
+        let checks_per_second = (im * 1000) as f64 / now.elapsed().as_millis() as f64;
+
+        info!("Expected Progress: {:.2}% | Time left (est): {:.0}s | Checkrate: {:.2} ch/s", (total as f64/expected)*100f64, (expected - total as f64)/checks_per_second, checks_per_second);
 
         now = Instant::now();
         im = 0;
-
-        std::thread::sleep(std::time::Duration::from_secs(3));
     }
 
     Ok(())
 }
 
 enum Update {
-    Sims(u64),
+    Checks(u64),
     Match(String)
 }
 
@@ -92,7 +93,7 @@ fn start_threads(threads: usize, match_value: String, tx: Sender<Update>) -> Vec
                 i += 1;
 
                 if now.elapsed().as_secs() > 2 {
-                    tx.send(Update::Sims(i)).unwrap();
+                    tx.send(Update::Checks(i)).unwrap();
 
                     i = 0;
                     now = Instant::now();

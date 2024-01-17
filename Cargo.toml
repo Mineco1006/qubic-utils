@@ -9,6 +9,7 @@ members = [
     "vanity-id-generator",
     "qubic-spectrum"
 ]
+resolver = "2"
 
 [profile.dev]
 overflow-checks = false

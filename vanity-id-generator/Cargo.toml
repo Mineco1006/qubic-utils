@@ -11,5 +11,5 @@ rand = "*"
 crossbeam-channel = "*"
 log = "*"
 env_logger = "*"
-structopt = "*"
+clap = { version = "4.4.7", features = ["derive"]}
 itertools = "*"
