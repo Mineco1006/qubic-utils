@@ -83,7 +83,7 @@ async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<
         })
     }
 
-    let client = Client::<Tcp>::new(&state.computor);
+    let client = Client::<Tcp>::new(&state.computor).unwrap();
 
     match rpc_method.request {
         RequestMethods::RequestComputors => {

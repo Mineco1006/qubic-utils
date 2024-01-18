@@ -128,6 +128,7 @@ impl<T: Copy> Into<QubicTxHash> for Call<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionData {
     TransferAsset(TransferAssetInput),
     IssueAsset(IssueAssetInput),

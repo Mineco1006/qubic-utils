@@ -6,7 +6,7 @@ use std::{thread::JoinHandle, io::{Write, Read}};
 use crate::transport::Transport;
 use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, assets::{RespondOwnedAsset, RequestOwnedAsset, QXID, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, IssueAssetInput, AssetName, RespondIssuedAsset, RequestIssuedAsset, RespondPossessedAsset, RequestPossessedAsset, TRANSFER_FEE}, ContractIpoBid}, MessageType, events::NetworkEvent, Header};
 use qubic_tcp_types::prelude::*;
-use anyhow::{Result, Ok};
+use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
 use qubic_types::{QubicWallet, QubicId, traits::{ToBytes, FromBytes}, Signature, QubicTxHash};
 use rand::Rng;
@@ -17,15 +17,15 @@ use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
 #[derive(Debug, Clone)]
 pub struct Client<T: Transport> {
-    transport: T
+    transport: Box<T>
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 impl<T> Client<T> where T: Transport {
-    pub fn new(url: impl ToString) -> Self {
-        Self {
-            transport: T::new(url.to_string())
-        }
+    pub fn new(url: impl ToString) -> Result<Self, T::Err> {
+        Ok(Self {
+            transport: T::new(url.to_string())?
+        })
     }
 
     pub fn qu(&self) -> Qu<T> {
@@ -178,12 +178,10 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let mut status = TransactionStatus::Failed;
 
         let tt_packet = Packet::new(RequestedTickTransactions { tick, flags: TransactionFlags::all() }, true);
-        let tt = self.transport.send_with_multiple_raw_responses(tt_packet)?;
+        let tt: Vec<TransactionWithData> = self.transport.send_with_multiple_responses(tt_packet)?;
 
         for tx in tt {
-            let mut digest = QubicTxHash::default();
-            let mut kg = KangarooTwelve::hash(&tx, &[]);
-            kg.squeeze(&mut digest.0);
+            let digest: QubicTxHash = tx.into();
             if digest == tx_hash {
                 status = TransactionStatus::Included;
                 break;
@@ -209,55 +207,55 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let _: JoinHandle<Result<()>> = std::thread::Builder::new().name("qubic-event-handler".to_string()).stack_size(10_000_000).spawn(move || {
             let event_handler = event_handler;
             let url = url;
-            let transport = T::new(url.clone());
-            
-            let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
-            let mut data_buffer = vec![0u8; 10_000_000];
-            
+            if let Ok(transport) = T::new(url.clone()) {
+                let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
+                let mut data_buffer = vec![0u8; 10_000_000];
 
-            'connection: loop {
-                let mut stream = transport.connect()?;
-                stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-                stream.write_all(&Packet::new(public_peers, true).to_bytes())?;
-                loop {
-                    match stream.read_exact(&mut header_buffer) {
-                        Err(_) => continue 'connection,
-                        _ => ()
-                    };
+                'connection: loop {
+                    let mut stream = transport.connect()?;
+                    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+                    stream.write_all(&Packet::new(public_peers, true).to_bytes())?;
+                    loop {
+                        match stream.read_exact(&mut header_buffer) {
+                            Err(_) => continue 'connection,
+                            _ => ()
+                        };
 
-                    let header = unsafe {
-                        read_unaligned(header_buffer.as_ptr() as *const Header)
-                    };
+                        let header = unsafe {
+                            read_unaligned(header_buffer.as_ptr() as *const Header)
+                        };
 
-                    match stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())]) {
-                        Err(_) => continue 'connection,
-                        _ => ()
-                    };
+                        match stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())]) {
+                            Err(_) => continue 'connection,
+                            _ => ()
+                        };
 
-                    match header.message_type {
-                        MessageType::ExchangePublicPeers => {
-                            event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
-                        },
-                        MessageType::BroadcastMessage => {
-                            
-                            event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
-                        },
-                        MessageType::BroadcastTransaction => {
-                            let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()])?;
+                        match header.message_type {
+                            MessageType::ExchangePublicPeers => {
+                                event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
+                            },
+                            MessageType::BroadcastMessage => {
+                                
+                                event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
+                            },
+                            MessageType::BroadcastTransaction => {
+                                let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()])?;
 
-                            event_handler(NetworkEvent::BroadcastTransaction(tx))?;
-                        },
-                        MessageType::BroadcastTick => {
-                            event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;
-                        },
-                        MessageType::BroadcastFutureTickData => {
-                            event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
+                                event_handler(NetworkEvent::BroadcastTransaction(tx))?;
+                            },
+                            MessageType::BroadcastTick => {
+                                event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;
+                            },
+                            MessageType::BroadcastFutureTickData => {
+                                event_handler(NetworkEvent::BroadcastFutureTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) }))?;
+                            }
+                            _ => ()
                         }
-                        _ => ()
                     }
                 }
             }
             
+            Ok(())
         })?;
         
         Ok(())

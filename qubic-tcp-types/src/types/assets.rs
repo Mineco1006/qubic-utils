@@ -2,6 +2,9 @@ use std::{fmt::Debug, str::FromStr};
 
 use qubic_types::QubicId;
 
+#[cfg(feature = "serde")]
+use serde::{de::Visitor, Serialize, Deserialize};
+
 use crate::MessageType;
 
 pub const QXID: QubicId = QubicId([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -49,6 +52,54 @@ generate_packed_integer!(I64, i64);
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct AssetName<const LEN: usize>(pub [u8; LEN]);
+
+#[cfg(feature = "serde")]
+pub struct AssetNameVisitor<const LEN: usize>;
+
+#[cfg(feature = "serde")]
+impl<'de, const LEN: usize> Visitor<'de> for AssetNameVisitor<LEN> {
+    type Value = AssetName<LEN>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str(&format!("Expected {LEN} character string"))
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error, {
+        match AssetName::<LEN>::from_str(v) {
+            Ok(r) => Ok(r),
+            Err(e) => Err(E::custom(e.to_string()))
+        }
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error, {
+        match AssetName::<LEN>::from_str(&v) {
+            Ok(r) => Ok(r),
+            Err(e) => Err(E::custom(e.to_string()))
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<const LEN: usize> Serialize for AssetName<LEN> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer {
+        serializer.collect_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const LEN: usize> Deserialize<'de> for AssetName<LEN> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de> {
+        deserializer.deserialize_str(AssetNameVisitor)
+    }
+}
 
 impl<const LEN: usize> FromStr for AssetName<LEN> {
     type Err = qubic_types::errors::QubicError;
@@ -144,6 +195,7 @@ pub struct FeesOutput {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct IssueAssetInput {
     pub name: AssetName<8>,

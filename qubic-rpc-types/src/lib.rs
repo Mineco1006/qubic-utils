@@ -53,9 +53,7 @@ pub enum RequestResults {
     RequestEntity(Entity),
     RequestComputors(ComputorInfos),
     SendTransaction(QubicTxHash),
-
-    /// This response is incomplete, transaction won't have valid signatures unless input_type == 0 && input_size == 0
-    RequestTickTransactions(Vec<Transaction>)
+    RequestTickTransactions(Vec<TransactionWithData>)
 }
 
 #[derive(Debug, Serialize, Deserialize)]

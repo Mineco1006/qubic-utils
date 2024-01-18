@@ -12,6 +12,7 @@ kangarootwelve = "0.1.2"
 serde = { version = "*", features = ["derive"]}
 ethereum-types = "0.14.1"
 hex = "*"
+wasm-bindgen = "*"
 
 [features]
 serde = []

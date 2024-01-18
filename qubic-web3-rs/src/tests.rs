@@ -16,15 +16,14 @@ fn test() {
     use client::Client;
     use qubic_types::{QubicId, QubicWallet};
     use transport::Tcp;
-    let client = Client::<Tcp>::new(COMPUTOR);
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let current_tick = dbg!(client.qu().get_current_tick_info().unwrap());
     let to = QubicId::from_str("BGKBSSHTGNLYOBUNOBYZNPEYDNABWKCHIWGOOUJRTGJOXTYPPWSXMGUAXHKI").unwrap();
     let wallet = QubicWallet::from_seed(seed).unwrap();
     let entity = dbg!(client.qu().request_entity(to).unwrap());
     println!("{}", entity.public_key);
-    let balance = entity.incoming_amount - entity.outgoing_amount;
-    println!("Balance: {}", balance);
+    println!("Balance: {}", entity.balance());
 
     let tx = RawTransaction {
         from: wallet.public_key,
@@ -40,7 +39,7 @@ fn test() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_tick_transactions() {
-    let client = Client::<Tcp>::new(COMPUTOR);
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let current_tick = client.qu().get_current_tick_info().unwrap();
 
@@ -55,7 +54,7 @@ fn test_tick_transactions() {
 
 #[test]
 fn test_tick_data() {
-    let client = Client::<Tcp>::new(COMPUTOR);
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let current_tick = client.qu().get_current_tick_info().unwrap();
 
@@ -68,7 +67,7 @@ fn test_tick_data() {
 
 #[test]
 fn test_check() {
-    let client = Client::<Tcp>::new(COMPUTOR);
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let tick = 11885253;
     let hash = QubicTxHash::from_str("fazkeookoirgnemyesoqdkfwhhbbrvhbgnqkwvstidaocuhouprgkwacevsm").unwrap();
@@ -79,7 +78,7 @@ fn test_check() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_subscription() {
-    let client = Client::<Tcp>::new(COMPUTOR);
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let (tx, rx) = crossbeam_channel::unbounded::<NetworkEvent>();
 
@@ -125,7 +124,7 @@ fn test_subscription() {
 fn test_ipo() {
     use qubic_types::QubicWallet;
 
-    let client = Client::<Tcp>::new("57.129.19.155:31841");
+    let client = Client::<Tcp>::new("57.129.19.155:31841").unwrap();
     let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 
     dbg!(client.qu().request_contract_ipo(3).unwrap().public_keys);
@@ -138,7 +137,7 @@ fn test_ipo() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_asset() {
-    let client = Client::<Tcp>::new("57.129.19.155:31841");
+    let client = Client::<Tcp>::new("57.129.19.155:31841").unwrap();
 
     dbg!(client.qu().request_entity(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());
     dbg!(client.qx().request_owned_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());

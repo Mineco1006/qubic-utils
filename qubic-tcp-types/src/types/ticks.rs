@@ -19,7 +19,8 @@ pub struct CurrentTickInfo {
     pub epoch: u16,
     pub tick: u32,
     pub number_of_aligned_votes: u16,
-    pub number_of_misaligned_votes: u16
+    pub number_of_misaligned_votes: u16,
+    pub initial_tick: u32
 }
 set_message_type!(CurrentTickInfo, MessageType::RespondCurrentTickInfo);
 

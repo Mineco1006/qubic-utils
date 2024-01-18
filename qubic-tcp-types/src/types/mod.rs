@@ -111,6 +111,7 @@ pub struct ContractIpo {
 set_message_type!(ContractIpo, MessageType::RespondContractIPO);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct ContractIpoBid {
     pub price: u64,
