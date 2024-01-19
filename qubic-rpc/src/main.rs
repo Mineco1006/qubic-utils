@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use axum::{
     routing::post,
     extract::State,
@@ -8,6 +7,7 @@ use axum::{
 use qubic_web3_rs::{client::Client, transport::Tcp, qubic_tcp_types::types::transactions::TransactionFlags};
 use qubic_rpc_types::{QubicJsonRpcRequest, QubicJsonRpcResponse, ResponseType, RequestError, RequestMethods, RequestResults};
 use axum::http::Method;
+use tokio::net::TcpListener;
 use tower_http::cors::{CorsLayer, Any};
 use clap::Parser;
 
@@ -41,10 +41,8 @@ async fn main() {
     let app = Router::new().route("/", post(request_handler)).with_state(state.clone()).layer(cors);
 
     info!("Binding server to port {}", state.port);
-    axum::Server::bind(&format!("0.0.0.0:{}", state.port).parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", state.port)).await.unwrap();
+    axum::serve(tcp_listener, app.into_make_service()).await.unwrap();
 }
 
 macro_rules! result_or_501 {
