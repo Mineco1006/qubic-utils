@@ -9,7 +9,6 @@ edition = "2021"
 getrandom = { version = "*", features = ["js"] }
 serde = { version = "*", features = ["derive"] }
 rand = { version = "*" }
-wbg-rand = "*"
 qubic-types = { path= "../qubic-types" }
 kangarootwelve = "0.1.2"
 
