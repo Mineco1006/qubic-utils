@@ -42,24 +42,11 @@ fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
     }
 }
 
-impl QubicId {
-    #[inline]
-    pub fn check_id(id: &str) -> Result<(), QubicError> {
-        if !id.chars().all(|c| c.is_uppercase() && c.is_ascii_alphabetic()) {
-            return Err(QubicError::InvalidIdFormatError { ident: "ID" })
-        }
-
-        let id = id.as_bytes();
-
-        if id.len() != 60 {
-            return Err(QubicError::InvalidIdLengthError { ident: "ID", expected: 55, found: id.len()})
-        }
-
-        Ok(())
-    }
+impl FromStr for QubicId {
+    type Err = QubicError;
 
     #[inline]
-    pub fn from_str(id: &str) -> Result<Self, QubicError> {
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
         let mut buffer = [0u8; 32];
 
         if !id.chars().all(|c| c.is_uppercase() && c.is_ascii_alphabetic()) {
@@ -85,6 +72,23 @@ impl QubicId {
         
 
         Ok(Self(buffer))
+    }
+}
+
+impl QubicId {
+    #[inline]
+    pub fn check_id(id: &str) -> Result<(), QubicError> {
+        if !id.chars().all(|c| c.is_uppercase() && c.is_ascii_alphabetic()) {
+            return Err(QubicError::InvalidIdFormatError { ident: "ID" })
+        }
+
+        let id = id.as_bytes();
+
+        if id.len() != 60 {
+            return Err(QubicError::InvalidIdLengthError { ident: "ID", expected: 55, found: id.len()})
+        }
+
+        Ok(())
     }
 
     #[inline]
@@ -133,6 +137,47 @@ impl QubicId {
         }
 
         identity
+    }
+
+    #[inline]
+    pub fn from_slice(slice: &[u8]) -> Result<Self, QubicError> {
+        if let Ok(arr) = slice.try_into() {
+            Ok(Self(arr))
+        } else {
+            Err(QubicError::InvalidIdLengthError { ident: "PUBLIC_KEY", expected: 32, found: slice.len() })
+        }
+    }
+
+    #[inline]
+    pub fn from_le_u64(le_u64: [u64; 4]) -> Self {
+        Self(core::array::from_fn(|i| le_u64[i/8].to_le_bytes()[i%8]))
+    }
+
+    #[inline]
+    pub fn from_be_u64(be_u64: [u64; 4]) -> Self {
+        Self(core::array::from_fn(|i| be_u64[i/8].to_be_bytes()[i%8]))
+    }
+
+    #[inline]
+    pub fn to_le_u64(self) -> [u64; 4] {
+        let mut ret = [[0; 8]; 4];
+
+        for i in 0..32 {
+            ret[i/8][i%8] = self.0[i];
+        }
+
+        core::array::from_fn(|i| u64::from_le_bytes(ret[i]))
+    }
+
+    #[inline]
+    pub fn to_be_u64(self) -> [u64; 4] {
+        let mut ret = [[0; 8]; 4];
+
+        for i in 0..32 {
+            ret[i/8][i%8] = self.0[i];
+        }
+
+        core::array::from_fn(|i| u64::from_be_bytes(ret[i]))
     }
 
     /// Verifies signature from message
@@ -192,13 +237,13 @@ impl QubicId {
             copy_nonoverlapping(message_digest.as_ptr(), temp.as_mut_ptr().offset(64), 32);
         }
 
-        let mut sig: [u64; 8] = signature.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+        let mut sig: [u64; 8] = signature.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
         
         let mut kg = KangarooTwelve::hash(&temp, &[]);
         kg.squeeze(&mut h);
 
 
-        let mut h: [u64; 8] = h.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+        let mut h: [u64; 8] = h.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
         if !ecc_mul_double(&mut sig[4..], &mut h, &mut a) {
             return false;
         }
@@ -211,7 +256,7 @@ impl QubicId {
 
         encode(&mut a, &mut a_bytes);
 
-        &signature[0..32] == &a_bytes[0..32]
+        signature[0..32] == a_bytes[0..32]
     }
 }
 
@@ -287,9 +332,9 @@ impl QubicWallet {
     #[inline(always)]
     pub fn get_public_key(private_key: &[u8; 32]) -> [u8; 32] {
         let mut p = PointAffine::default();
-        let mut private_key = private_key.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>();
+        let private_key = private_key.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>();
 
-        ecc_mul_fixed(&mut private_key, &mut p);
+        ecc_mul_fixed(&private_key, &mut p);
         let mut private_key: [u8; 32] = private_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
         encode(&mut p, &mut private_key);
 
@@ -320,7 +365,7 @@ impl QubicWallet {
             return Err(QubicError::EllipticCurveError)
         }
 
-        let private_key_u64 = self.private_key.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>();
+        let private_key_u64 = self.private_key.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>();
 
         unsafe {
             if !ecc_mul(&mut *(&mut a as *mut PointAffine), &private_key_u64, &mut a) {
@@ -386,13 +431,13 @@ impl QubicWallet {
             let mut im = [0u8; 64];
             kg.squeeze(&mut im);
 
-            copy_nonoverlapping(im.as_ptr(), r.as_mut_ptr() as *mut u8, 64);
-            let k: [u64; 8] = k.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
-            let mut r: [u64; 8] = r.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+            copy_nonoverlapping(im.as_ptr(), r.as_mut_ptr(), 64);
+            let k: [u64; 8] = k.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+            let mut r: [u64; 8] = r.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
             ecc_mul_fixed(&r, &mut r_a);
 
             encode(&mut r_a, &mut signature);
-            let mut signature_i: [u64; 8] = signature.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+            let mut signature_i: [u64; 8] = signature.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
             
             copy_nonoverlapping(signature_i.as_ptr() as *mut u8, temp.as_mut_ptr(), 32);
             copy_nonoverlapping(self.public_key.0.as_ptr(), temp.as_mut_ptr().offset(32), 32);
@@ -400,7 +445,7 @@ impl QubicWallet {
             let mut kg = KangarooTwelve::hash(&temp, &[]);
             kg.squeeze(&mut h);
             
-            let mut h: [u64; 8] = h.chunks_exact(8).into_iter().map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
+            let mut h: [u64; 8] = h.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
             let r_i = r;
             montgomery_multiply_mod_order(&r_i, &MONTGOMERY_R_PRIME, &mut r);
             let r_i = r;
@@ -431,25 +476,59 @@ impl QubicWallet {
 
 impl Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(&self.0)))
+        f.write_str(&format!("0x{}", hex::encode(self.0)))
     }
 }
 
 impl Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(&self.0)))
+        f.write_str(&format!("0x{}", hex::encode(self.0)))
     }
 }
 
 impl Debug for Nonce {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(&self.0)))
+        f.write_str(&format!("0x{}", hex::encode(self.0)))
     }
 }
 
 impl Display for Nonce {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(&self.0)))
+        f.write_str(&format!("0x{}", hex::encode(self.0)))
+    }
+}
+
+impl Nonce {
+    #[inline]
+    pub fn from_le_u64(le_u64: [u64; 4]) -> Self {
+        Self(core::array::from_fn(|i| le_u64[i/8].to_le_bytes()[i%8]))
+    }
+
+    #[inline]
+    pub fn from_be_u64(be_u64: [u64; 4]) -> Self {
+        Self(core::array::from_fn(|i| be_u64[i/8].to_be_bytes()[i%8]))
+    }
+
+    #[inline]
+    pub fn to_le_u64(self) -> [u64; 4] {
+        let mut ret = [[0; 8]; 4];
+
+        for i in 0..32 {
+            ret[i/8][i%8] = self.0[i];
+        }
+
+        core::array::from_fn(|i| u64::from_le_bytes(ret[i]))
+    }
+
+    #[inline]
+    pub fn to_be_u64(self) -> [u64; 4] {
+        let mut ret = [[0; 8]; 4];
+
+        for i in 0..32 {
+            ret[i/8][i%8] = self.0[i];
+        }
+
+        core::array::from_fn(|i| u64::from_be_bytes(ret[i]))
     }
 }
 

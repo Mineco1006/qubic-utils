@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::QubicId;
+
 #[derive(Debug, Error)]
 pub enum QubicError {
     #[error("Invalid {ident} length (expected {expected}, found {found})")]
@@ -12,7 +14,10 @@ pub enum QubicError {
     EllipticCurveError,
 
     #[error("Public key is not formatted correctly for 128bit access")]
-    FormattingError
+    FormattingError,
+
+    #[error("Found non matching signer (expected: {expected}, found: {found})")]
+    WrongSignature { expected: QubicId, found: QubicId }
 }
 
 #[derive(Debug, Error)]

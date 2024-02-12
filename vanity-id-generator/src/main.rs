@@ -110,8 +110,8 @@ pub fn get_random_seed() -> String {
 
     let mut rng = rand::thread_rng();
 
-    for i in 0..55 {
-        seed[i] = b'a' + rng.gen::<u8>() % 26;
+    for s in seed.iter_mut() {
+        *s = b'a' + rng.gen::<u8>() % 26;
     }
 
     String::from_utf8(seed.to_vec()).unwrap()

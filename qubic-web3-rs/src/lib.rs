@@ -1,4 +1,8 @@
 #![feature(slice_flatten)]
+#![allow(clippy::let_underscore_future)]
+#![allow(clippy::needless_range_loop)]
+#![allow(async_fn_in_trait)]
+
 
 pub mod transport;
 pub mod client;

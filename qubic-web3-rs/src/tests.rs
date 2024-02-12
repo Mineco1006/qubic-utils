@@ -6,7 +6,8 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "95.156.230.174:21841";
+const COMPUTOR: &str = "80.155.26.222:21841";
+const TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
@@ -52,6 +53,7 @@ fn test_tick_transactions() {
     dbg!(tick_txns);
 }
 
+#[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_tick_data() {
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
@@ -65,6 +67,7 @@ fn test_tick_data() {
     dbg!(tick_data);
 }
 
+#[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_check() {
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
@@ -157,7 +160,7 @@ async fn test() {
     use client::Client;
     use qubic_types::{QubicId, QubicWallet};
     use transport::Tcp;
-    let client = Client::<Tcp>::new(COMPUTOR).await;
+    let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
 
     let current_tick = dbg!(client.qu().get_current_tick_info().await.unwrap());
     let to = QubicId::from_str("BGKBSSHTGNLYOBUNOBYZNPEYDNABWKCHIWGOOUJRTGJOXTYPPWSXMGUAXHKI").unwrap();
@@ -180,17 +183,17 @@ async fn test() {
 #[cfg(any(feature = "async", feature = "http"))]
 #[tokio::test]
 async fn test_tick_transactions() {
-    let client = Client::<Tcp>::new(COMPUTOR).await;
+    let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
 
-    let tick_txns = client.qu().request_tick_transactions(TICK, TransactionFlags::all()).await.unwrap();
+    let tick_txns = client.qu().request_tick_transactions(12380150, TransactionFlags::all()).await.unwrap();
 
     dbg!(tick_txns);
 }
 
 #[cfg(any(feature = "async", feature = "http"))]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_subscription() {
-    let client = Client::<Tcp>::new(COMPUTOR).await;
+    let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
 
     let (tx, rx) = crossbeam_channel::unbounded::<NetworkEvent>();
 
@@ -227,4 +230,30 @@ async fn test_subscription() {
 
         println!("Tick: {} | EP: {} | Solutions: {} | Transactions: {}", current_tick, ep, solutions, transactions);
     }
+}
+
+#[cfg(any(feature = "async", feature = "http"))]
+#[tokio::test]
+async fn test_read_only_qu() {
+    let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
+
+    dbg!(client.qu().request_entity(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).await.unwrap());
+    dbg!(client.qu().exchange_public_peers(ExchangePublicPeers::default()).await.unwrap());
+    let current_tick = dbg!(client.qu().get_current_tick_info().await.unwrap());
+    dbg!(client.qu().request_quorum_tick(current_tick.tick - 10, [0u8; (676 + 7) / 8]).await.unwrap());
+    dbg!(client.qu().request_tick_data(current_tick.tick - 10).await.unwrap());
+}
+
+#[cfg(any(feature = "async", feature = "http"))]
+#[tokio::test]
+async fn test_asset() {
+    let client = Client::<Tcp>::new(TESTNET).await.unwrap();
+
+    dbg!(client.qu().request_entity(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).await.unwrap());
+    dbg!(client.qx().request_owned_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).await.unwrap());
+    dbg!(client.qx().request_owned_assets(QubicId::from_str("MINECOMVVJWRHCKXPROBYQFUGKHAFMRIIYKPMDXGVAJLGHCMIRVVVDIBJIKB").unwrap()).await.unwrap());
+
+    dbg!(client.qx().request_issued_assets(QubicId::default()).await.unwrap());
+
+    dbg!(client.qx().request_issued_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).await.unwrap());
 }

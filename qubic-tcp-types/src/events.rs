@@ -7,5 +7,5 @@ pub enum NetworkEvent {
     BroadcastMessage(BroadcastMessage),
     BroadcastTransaction(TransactionWithData),
     BroadcastTick(Tick),
-    BroadcastFutureTick(TickData)
+    BroadcastFutureTick(Box<TickData>)
 }

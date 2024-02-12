@@ -43,22 +43,22 @@ pub enum BallotOrProposal {
     Proposal(Proposal)
 }
 
-impl Into<BallotOrProposal> for &VarStructBuffer {
-    fn into(self) -> BallotOrProposal {
-        match self.0[0] {
+impl From<&VarStructBuffer> for BallotOrProposal {
+    fn from(value: &VarStructBuffer) -> BallotOrProposal {
+        match value.0[0] {
             0 => {
                 let ballot = Ballot {
                     zero: 0,
-                    votes: self.0[1..255].try_into().unwrap(),
-                    quasi_random_number: self.0[255]
+                    votes: value.0[1..255].try_into().unwrap(),
+                    quasi_random_number: value.0[255]
                 };
 
                 BallotOrProposal::Ballot(ballot)
             },
             _ => {
                 let proposal = Proposal {
-                    uri_size: self.0[0],
-                    uri: self.0[1..].try_into().unwrap()
+                    uri_size: value.0[0],
+                    uri: value.0[1..].try_into().unwrap()
                 };
 
                 BallotOrProposal::Proposal(proposal)

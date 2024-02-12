@@ -1,5 +1,4 @@
-use std::{path::Path, fs::File, io::{BufReader, Read}};
-
+use std::{fs::File, io::{BufReader, Read}, path::Path};
 use qubic_tcp_types::types::Entity;
 use qubic_types::QubicId;
 use anyhow::Result;
@@ -19,7 +18,7 @@ impl SpectrumFile {
 
         let mut spectrum = vec![Entity { public_key: QubicId::default(), incoming_amount: 0, outgoing_amount: 0, number_of_incoming_transfers: 0, number_of_outgoing_transfers: 0, latest_incoming_transfer_tick: 0, latest_outgoing_transfer_tick: 0 }; SPECTRUM_CAPACITY];
 
-        let file = File::open(&path)?;
+        let file = File::open(path)?;
 
         let mut reader = BufReader::new(file);
 
@@ -38,7 +37,7 @@ impl SpectrumFile {
             }
         }
 
-        compressed.sort_by(|e1, e2| (e1.balance()).cmp(&e2.balance()));
+        compressed.sort_by_key(|e1| (e1.balance()));
 
         Ok(
             Self {
@@ -144,6 +143,7 @@ impl SpectrumFile {
 
 #[test]
 fn test() {
+    use std::str::FromStr;
     let spectrum = SpectrumFile::load_file("spectrum/spectrum.090").unwrap();
 
     let index = spectrum.get_spectrum_index(&QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap());

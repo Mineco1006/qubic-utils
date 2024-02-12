@@ -279,20 +279,21 @@ pub fn fp2addsub1271(mut a: F2elmT, b: F2elmT, c: &mut F2elmT) {
 
 /// Table lookup to extract a point represented as (x+y,y-x,2t) corresponding to extended twisted Edwards coordinates (X:Y:Z:T) with Z=1
 #[inline]
-pub unsafe fn table_lookup_fixed_base(p: &mut PointPrecomp, digit: u64, sign: u64) {
-    let digit = digit as isize;
-    if sign != 0 {
-        //let table_pointer = *(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit);
-        p.xy.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).yx);
-        p.yx.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).xy);
-        p.t2[0][0] = !(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[0][0];
-        p.t2[0][1] = 0x7FFFFFFFFFFFFFFF - (*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[0][1];
-        p.t2[1][0] = !(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[1][0];
-        p.t2[1][1] = 0x7FFFFFFFFFFFFFFF - (*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[1][1];
-    } else {
-        p.xy.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).xy);
-        p.yx.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).yx);
-        p.t2.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2);
+pub fn table_lookup_fixed_base(p: &mut PointPrecomp, digit: u64, sign: u64) {
+    unsafe {
+        let digit = digit as isize;
+        if sign != 0 {
+            p.xy.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).yx);
+            p.yx.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).xy);
+            p.t2[0][0] = !(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[0][0];
+            p.t2[0][1] = 0x7FFFFFFFFFFFFFFF - (*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[0][1];
+            p.t2[1][0] = !(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[1][0];
+            p.t2[1][1] = 0x7FFFFFFFFFFFFFFF - (*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2[1][1];
+        } else {
+            p.xy.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).xy);
+            p.yx.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).yx);
+            p.t2.copy_from_slice(&(*(FIXED_BASE_TABLE.as_ptr() as *const PointPrecomp).offset(digit)).t2);
+        }
     }
 }
 
@@ -505,7 +506,7 @@ pub fn ecc_point_validate(p: &PointExtproj) -> bool {
     fp2add1271(t2, t1, &mut t2);                                 // 1 + dx^2*y^2
     fp2sub1271(t3, t2, &mut t1);                                 // -x^2 + y^2 - 1 - dx^2*y^2
 
-    (!((t1[0][0] | t1[0][1]) != 0) || !(((t1[0][0] + 1) | (t1[0][1] + 1)) != 0)) && (!((t1[1][0] | t1[1][1]) != 0)|| !(((t1[1][0] + 1) | (t1[1][1] + 1)) != 0))
+    ((t1[0][0] | t1[0][1]) == 0 || ((t1[0][0] + 1) | (t1[0][1] + 1)) == 0) && ((t1[1][0] | t1[1][1]) == 0|| ((t1[1][0] + 1) | (t1[1][1] + 1)) == 0)
 }
 
 /// Mixed point addition P = P+Q or P = P+P
@@ -552,8 +553,8 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         scalar[2] = __shiftright128(scalar[2], scalar[3], 1);
         scalar[3] >>= 1;
 
-        for i in 0..49 {
-            digits[i] = (scalar[0] & 1) - 1;  // Convention for the "sign" row: if scalar_(i+1) = 0 then digit_i = -1 (negative), else if scalar_(i+1) = 1 then digit_i = 0 (positive)
+        for digit in digits.iter_mut().take(49) {
+            *digit = (scalar[0] & 1) - 1;  // Convention for the "sign" row: if scalar_(i+1) = 0 then digit_i = -1 (negative), else if scalar_(i+1) = 1 then digit_i = 0 (positive)
 
             // Shift scalar to the right by 1   
             scalar[0] = __shiftright128(scalar[0], scalar[1], 1);
@@ -604,7 +605,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[219] << 1) + digits[169]) << 1) + digits[119]) << 1) + digits[69], digits[19]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[209] << 1) + digits[159]) << 1) + digits[109]) << 1) + digits[59], digits[9]);
+        table_lookup_fixed_base(&mut s, (((((digits[209] << 1) + digits[159]) << 1) + digits[109]) << 1) + digits[59], digits[9]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -616,7 +617,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[218] << 1) + digits[168]) << 1) + digits[118]) << 1) + digits[68], digits[18]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[208] << 1) + digits[158]) << 1) + digits[108]) << 1) + digits[58], digits[8]);
+        table_lookup_fixed_base(&mut s, (((((digits[208] << 1) + digits[158]) << 1) + digits[108]) << 1) + digits[58], digits[8]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -628,7 +629,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[217] << 1) + digits[167]) << 1) + digits[117]) << 1) + digits[67], digits[17]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[207] << 1) + digits[157]) << 1) + digits[107]) << 1) + digits[57], digits[7]);
+        table_lookup_fixed_base(&mut s, (((((digits[207] << 1) + digits[157]) << 1) + digits[107]) << 1) + digits[57], digits[7]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -640,7 +641,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[216] << 1) + digits[166]) << 1) + digits[116]) << 1) + digits[66], digits[16]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[206] << 1) + digits[156]) << 1) + digits[106]) << 1) + digits[56], digits[6]);
+        table_lookup_fixed_base(&mut s, (((((digits[206] << 1) + digits[156]) << 1) + digits[106]) << 1) + digits[56], digits[6]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -652,7 +653,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[215] << 1) + digits[165]) << 1) + digits[115]) << 1) + digits[65], digits[15]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[205] << 1) + digits[155]) << 1) + digits[105]) << 1) + digits[55], digits[5]);
+        table_lookup_fixed_base(&mut s, (((((digits[205] << 1) + digits[155]) << 1) + digits[105]) << 1) + digits[55], digits[5]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -664,7 +665,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[214] << 1) + digits[164]) << 1) + digits[114]) << 1) + digits[64], digits[14]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[204] << 1) + digits[154]) << 1) + digits[104]) << 1) + digits[54], digits[4]);
+        table_lookup_fixed_base(&mut s, (((((digits[204] << 1) + digits[154]) << 1) + digits[104]) << 1) + digits[54], digits[4]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -676,7 +677,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[213] << 1) + digits[163]) << 1) + digits[113]) << 1) + digits[63], digits[13]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[203] << 1) + digits[153]) << 1) + digits[103]) << 1) + digits[53], digits[3]);
+        table_lookup_fixed_base(&mut s, (((((digits[203] << 1) + digits[153]) << 1) + digits[103]) << 1) + digits[53], digits[3]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -688,7 +689,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[212] << 1) + digits[162]) << 1) + digits[112]) << 1) + digits[62], digits[12]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[202] << 1) + digits[152]) << 1) + digits[102]) << 1) + digits[52], digits[2]);
+        table_lookup_fixed_base(&mut s, (((((digits[202] << 1) + digits[152]) << 1) + digits[102]) << 1) + digits[52], digits[2]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -700,7 +701,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[211] << 1) + digits[161]) << 1) + digits[111]) << 1) + digits[61], digits[11]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[201] << 1) + digits[151]) << 1) + digits[101]) << 1) + digits[51], digits[1]);
+        table_lookup_fixed_base(&mut s, (((((digits[201] << 1) + digits[151]) << 1) + digits[101]) << 1) + digits[51], digits[1]);
         eccmadd(&s, &mut r);
 
         eccdouble(&mut r);
@@ -712,7 +713,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         eccmadd(&s, &mut r);
         table_lookup_fixed_base(&mut s, 16 + (((((digits[210] << 1) + digits[160]) << 1) + digits[110]) << 1) + digits[60], digits[10]);
         eccmadd(&s, &mut r);
-        table_lookup_fixed_base(&mut s, 00 + (((((digits[200] << 1) + digits[150]) << 1) + digits[100]) << 1) + digits[50], digits[0]);
+        table_lookup_fixed_base(&mut s, (((((digits[200] << 1) + digits[150]) << 1) + digits[100]) << 1) + digits[50], digits[0]);
         eccmadd(&s, &mut r);
 
         eccnorm(&mut r, q);
@@ -886,7 +887,7 @@ pub fn mul_truncate(s: &[u64], c: &[u64]) -> u64 {
     addcarry_u64(addcarry_u64(0, high00, low10, &mut t0), high10, 0, &mut t1);
     low01 = _umul128(s[0], c[1], &mut high01);
     t2 = addcarry_u64(addcarry_u64(0, t0, low01, &mut t0), t1, high01, &mut t3) as u64;
-    low20 = _umul128(s[2], c[0], &mut high20) as u64;
+    low20 = _umul128(s[2], c[0], &mut high20);
     addcarry_u64(addcarry_u64(0, t3, low20, &mut t4), t2, high20, &mut t5);
     low02 = _umul128(s[0], c[2], &mut high02);
     t6 = addcarry_u64(addcarry_u64(0, t4, low02, &mut t7), t5, high02, &mut t8) as u64;
@@ -972,7 +973,7 @@ pub fn ecc_precomp_double(p: &mut PointExtproj, table: &mut [PointExtprojPrecomp
 
     r1_to_r2(p, &mut table[0]);
     eccdouble(p);
-    r1_to_r3(&p, &mut pp);
+    r1_to_r3(p, &mut pp);
 
     eccadd_core(&table[0], &pp, &mut q);
     r1_to_r2(&q, &mut table[1]);
@@ -998,7 +999,7 @@ pub fn ecc_mul_double(k: &mut [u64], l: &mut [u64], q: &mut PointAffine) -> bool
     let mut k_scalars = [0u64; 4];
     let mut l_scalars = [0u64; 4];
 
-    point_setup(&q, &mut q1);
+    point_setup(q, &mut q1);
 
     if !ecc_point_validate(&q1) {
         return false;
@@ -1116,10 +1117,10 @@ pub fn ecc_precomp(p: &mut PointExtproj, t: &mut [PointExtprojPrecomp]) {
     ecc_psi(&mut pp);
     r1_to_r3(&pp, &mut s);
 
-    r1_to_r2(&p, &mut t[0]);
+    r1_to_r2(p, &mut t[0]);
 
     ecc_psi(p);
-    r1_to_r3(&p, &mut r);
+    r1_to_r3(p, &mut r);
 
     eccadd_core(&t[0], &q, &mut pp);              // T[1] = P+Q using the representations (X,Y,Z,Ta,Tb) <- (X+Y,Y-X,2Z,2dT) + (X+Y,Y-X,Z,T)
     r1_to_r2(&pp, &mut t[1]);                    // Converting from (X,Y,Z,Ta,Tb) to (X+Y,Y-X,2Z,2dT)
@@ -1142,7 +1143,7 @@ pub fn ecc_precomp(p: &mut PointExtproj, t: &mut [PointExtprojPrecomp]) {
 pub fn cofactor_clearing(r: &mut PointExtproj) {
     let mut q = PointExtprojPrecomp::default();
 
-    r1_to_r2(&r, &mut q);                      // Converting from (X,Y,Z,Ta,Tb) to (X+Y,Y-X,2Z,2dT)
+    r1_to_r2(r, &mut q);                      // Converting from (X,Y,Z,Ta,Tb) to (X+Y,Y-X,2Z,2dT)
     eccdouble(r);                        // P = 2*P using representations (X,Y,Z,Ta,Tb) <- 2*(X,Y,Z)
     eccadd(&q, r);                        // P = P+Q using representations (X,Y,Z,Ta,Tb) <- (X,Y,Z,Ta,Tb) + (X+Y,Y-X,2Z,2dT)
     eccdouble(r);
@@ -1163,7 +1164,7 @@ pub fn ecc_mul(p: &mut PointAffine, k: &[u64], q: &mut PointAffine) -> bool {
     let mut digits = [0u64; 64];
     let mut sign_masks = [0u64; 64];
 
-    point_setup(&p, &mut r);
+    point_setup(p, &mut r);
 
     if !ecc_point_validate(&r) {
         return false;
@@ -1316,7 +1317,7 @@ pub fn decode(pencoded: &[u8], p: &mut PointAffine) -> bool {
         p.x[1] = a;
         p.x[0] = b;*/
 
-        point_setup(&p, &mut r_l);
+        point_setup(p, &mut r_l);
 
         if !ecc_point_validate(&r_l) {
             fpneg1271(&mut r_l.x[1]);

@@ -1,3 +1,4 @@
+use qubic_tcp_types::types::Computors;
 use qubic_types::{QubicId, Signature};
 use serde::{Serialize, Deserialize};
 
@@ -8,12 +9,12 @@ pub struct ComputorInfos {
     pub signature: Signature
 }
 
-impl Into<ComputorInfos> for qubic_tcp_types::types::Computors {
-    fn into(self) -> ComputorInfos {
+impl From<Computors> for ComputorInfos {
+    fn from(value: Computors) -> Self {
         ComputorInfos {
-            epoch: self.epoch,
-            ids: self.public_key.to_vec(),
-            signature: self.signature
+            epoch: value.epoch,
+            ids: value.public_key.to_vec(),
+            signature: value.signature
         }
     }
 }

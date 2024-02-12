@@ -114,12 +114,11 @@ impl Ballot {
         let index_offset = computor_index % 3;
         let expanded_index = 8 - index_offset;
 
-        let vote;
-        if index_offset == 0 {
-            vote = (self.votes[compressed_index] >> expanded_index) & 0b111;
+        let vote = if index_offset == 0 {
+            (self.votes[compressed_index] >> expanded_index) & 0b111
         } else {
-            vote = ((self.votes[compressed_index] >> expanded_index) & (u8::MAX >> expanded_index)) | ((self.votes[compressed_index + 1] & (u8::MAX >> (8 - 3 + index_offset))) << index_offset)
-        }
+            ((self.votes[compressed_index] >> expanded_index) & (u8::MAX >> expanded_index)) | ((self.votes[compressed_index + 1] & (u8::MAX >> (8 - 3 + index_offset))) << index_offset)
+        };
         
         if vote == 0 {
             VoteOption::NotVoted

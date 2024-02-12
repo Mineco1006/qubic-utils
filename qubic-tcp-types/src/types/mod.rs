@@ -32,11 +32,11 @@ pub struct WorkSolution {
     pub nonce: Nonce,
 }
 
-impl Into<BroadcastMessage> for WorkSolution {
-    fn into(self) -> BroadcastMessage {
-        BroadcastMessage {
+impl From<WorkSolution> for BroadcastMessage {
+    fn from(value: WorkSolution) -> Self {
+        Self {
             source_public_key: QubicId::default(),
-            destination_public_key: self.public_key,
+            destination_public_key: value.public_key,
             gamming_nonce: Nonce::default(),
             solution_nonce: Nonce::default(),
             signature: Signature::default()

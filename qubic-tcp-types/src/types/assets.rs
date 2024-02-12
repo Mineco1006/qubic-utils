@@ -11,43 +11,45 @@ pub const QXID: QubicId = QubicId([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 pub const TRANSFER_FEE: u64 = 1_000_000;
 pub const ISSUE_ASSET_FEE: u64 = 1_000_000_000;
 
-macro_rules! generate_packed_integer {
-    ($name: ident, $alias: ty) => {
-        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-        #[repr(C)]
-        pub struct $name([u8; std::mem::size_of::<$alias>()]);
+macro_rules! generate_packed_integers {
+    ($($name: ident $alias: ty)*) => {
 
-        impl ToString for $name {
-            fn to_string(&self) -> String {
-                <$alias>::from_le_bytes(self.0).to_string()
+        $(
+            #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+            #[repr(C)]
+            pub struct $name([u8; std::mem::size_of::<$alias>()]);
+
+            impl ToString for $name {
+                fn to_string(&self) -> String {
+                    <$alias>::from_le_bytes(self.0).to_string()
+                }
             }
-        }
+            
+            impl Debug for $name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    f.write_str(&self.to_string())?;
+            
+                    Ok(())
+                }
+            }
+
+            impl From<$alias> for $name {
+                fn from(val: $alias) -> Self {
+                    $name(val.to_le_bytes())
+                }
+            }
+
+            impl From<$name> for $alias {
+                fn from(value: $name) -> $alias {
+                    <$alias>::from_le_bytes(value.0)
+                }
+            }
+        )*
         
-        impl Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str(&self.to_string())?;
-        
-                Ok(())
-            }
-        }
-
-        impl From<$alias> for $name {
-            fn from(val: $alias) -> Self {
-                $name(val.to_le_bytes())
-            }
-        }
-
-        impl Into<$alias> for $name {
-            fn into(self) -> $alias {
-                <$alias>::from_le_bytes(self.0)
-            }
-        }
     };
 }
 
-generate_packed_integer!(U16, u16);
-generate_packed_integer!(U32, u32);
-generate_packed_integer!(I64, i64);
+generate_packed_integers!(U16 u16 I16 i16 U32 u32 I32 i32 U64 u64 I64 i64);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]

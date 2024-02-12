@@ -82,8 +82,8 @@ impl TransactionFlags {
         let mut flags = [0u8; NUMBER_OF_TRANSACTION_PER_TICK/8];
         let full = usize::from(first)/8;
 
-        for i in 0..full {
-            flags[i] = u8::MAX;
+        for flag in flags.iter_mut() {
+            *flag = u8::MAX;
         }
 
         let remaining = usize::from(first)%8;
@@ -105,10 +105,10 @@ pub struct RequestedTickTransactions {
 
 set_message_type!(RequestedTickTransactions, MessageType::RequestTickTransactions);
 
-impl Into<QubicTxHash> for Transaction {
-    fn into(self) -> QubicTxHash {
+impl From<Transaction> for QubicTxHash {
+    fn from(val: Transaction) -> Self {
         let mut hash = [0; 32];
-        let mut kg = KangarooTwelve::hash(&self.to_bytes(), &[]);
+        let mut kg = KangarooTwelve::hash(&val.to_bytes(), &[]);
 
         kg.squeeze(&mut hash);
 
@@ -116,10 +116,10 @@ impl Into<QubicTxHash> for Transaction {
     }
 }
 
-impl<T: Copy> Into<QubicTxHash> for Call<T> {
-    fn into(self) -> QubicTxHash {
+impl<T: Copy> From<Call<T>> for QubicTxHash {
+    fn from(val: Call<T>) -> Self {
         let mut hash = [0; 32];
-        let mut kg = KangarooTwelve::hash(&self.to_bytes(), &[]);
+        let mut kg = KangarooTwelve::hash(&val.to_bytes(), &[]);
 
         kg.squeeze(&mut hash);
 
@@ -191,7 +191,7 @@ impl FromBytes for TransactionWithData {
 
         match raw_tx.input_type {
             0 => {
-                if raw_tx.input_size as usize == std::mem::size_of::<Nonce>() && raw_tx.amount == 0 {
+                if raw_tx.input_size as usize == std::mem::size_of::<Nonce>() && tx_data.len() == std::mem::size_of::<Nonce>() && raw_tx.amount == 0 {
                     data = TransactionData::SubmitWork(Nonce(tx_data.try_into().unwrap()));
                 } else if raw_tx.input_size == 16 {
                     let bid = unsafe {
@@ -242,10 +242,10 @@ impl GetSigner for TransactionWithData {
     }
 }
 
-impl Into<QubicTxHash> for TransactionWithData {
-    fn into(self) -> QubicTxHash {
+impl From<TransactionWithData> for QubicTxHash {
+    fn from(val: TransactionWithData) -> Self {
         let mut hash = [0; 32];
-        let mut kg = KangarooTwelve::hash(&self.to_bytes(), &[]);
+        let mut kg = KangarooTwelve::hash(&val.to_bytes(), &[]);
 
         kg.squeeze(&mut hash);
 

@@ -1,6 +1,7 @@
 use std::ptr::read_unaligned;
 use kangarootwelve::KangarooTwelve;
-use crate::Signature;
+use crate::errors::QubicError;
+use crate::{QubicWallet, Signature};
 
 use crate::{errors::ByteEncodingError, QubicId};
 
@@ -40,6 +41,41 @@ pub trait GetSigner {
 
 pub trait VerifySignature {
     fn verify(&self) -> bool;
+}
+
+pub trait SetSignature {
+    fn set_signature(&mut self, signature: Signature);
+}
+
+pub trait Sign where Self: GetSigner + ToBytes + FromBytes {
+    fn sign(&mut self, wallet: &QubicWallet) -> Result<(), QubicError>;
+}
+
+impl<T> Sign for T
+    where T: GetSigner + ToBytes + FromBytes
+{
+
+    fn sign(&mut self, wallet: &QubicWallet) -> Result<(), QubicError> {
+
+        if self.get_signer() != &wallet.public_key {
+            return Err(QubicError::WrongSignature { expected: wallet.public_key, found: *self.get_signer() })
+        }
+
+        let mut bytes = self.to_bytes();
+
+        let mut digest = [0; 32];
+        let mut kg = KangarooTwelve::hash(&bytes[..bytes.len() - std::mem::size_of::<Signature>()], &[]);
+        kg.squeeze(&mut digest);
+
+        let sig = wallet.sign(digest);
+
+        let len = bytes.len();
+        bytes[len - std::mem::size_of::<Signature>()..len].copy_from_slice(&sig.to_bytes());
+
+        *self = T::from_bytes(&bytes).unwrap();
+
+        Ok(())
+    }
 }
 
 impl<T: ToBytes + GetSigner> VerifySignature for T {
