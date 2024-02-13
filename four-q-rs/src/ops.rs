@@ -1,8 +1,8 @@
 #![allow(unused_assignments)]
 #[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::{_subborrow_u64, _addcarry_u64};
+use core::arch::x86_64::{_subborrow_u64, _addcarry_u64};
 
-use std::ptr::copy_nonoverlapping;
+use core::ptr::copy_nonoverlapping;
 use crate::{
     types::{FelmT, F2elmT, PointPrecomp, PointExtprojPrecomp, PointAffine, PointExtproj},
     consts::{

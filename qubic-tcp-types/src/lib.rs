@@ -1,3 +1,7 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
 use rand::Rng;
 
 pub mod types;
@@ -51,6 +55,7 @@ pub struct Header {
     pub dejavu: u32,
 }
 
+#[cfg(feature = "std")]
 impl Header {
 
     pub fn new(size: usize, message_type: MessageType, randomize_dejavu: bool) -> Self {

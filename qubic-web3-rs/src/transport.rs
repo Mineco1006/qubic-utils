@@ -88,7 +88,7 @@ impl Transport for Tcp {
 
         stream.read_exact(&mut header_buffer).await?;
 
-        let mut header = Header::from_bytes(&header_buffer)?;
+        let mut header = Header::from_bytes(&header_buffer).unwrap();
 
         let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
 
@@ -100,14 +100,14 @@ impl Transport for Tcp {
 
             stream.read_exact(&mut header_buffer).await?;
 
-            header = Header::from_bytes(&header_buffer)?;
+            header = Header::from_bytes(&header_buffer).unwrap();
         }
 
         let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
         stream.read_exact(&mut data_buffer).await?;
 
-        let res = T::from_bytes(&data_buffer)?;
+        let res = T::from_bytes(&data_buffer).unwrap();
 
         Ok(res)
     }
@@ -130,7 +130,7 @@ impl Transport for Tcp {
         loop {
             stream.read_exact(&mut header_buffer).await?;
 
-            let header = Header::from_bytes(&header_buffer)?;
+            let header = Header::from_bytes(&header_buffer).unwrap();
 
             if header.message_type == MessageType::EndResponse {
                 break;
@@ -141,7 +141,7 @@ impl Transport for Tcp {
             
             stream.read_exact(&mut data_buffer).await?;
 
-            let res = T::from_bytes(&data_buffer)?;
+            let res = T::from_bytes(&data_buffer).unwrap();
 
             ret.push(res);
         }
@@ -426,7 +426,7 @@ impl Transport for ConnectedTcp {
 
             self.stream.borrow_mut().read_exact(&mut header_buffer).await?;
 
-            let mut header = Header::from_bytes(&header_buffer)?;
+            let mut header = Header::from_bytes(&header_buffer).unwrap();
 
             let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
 
@@ -438,14 +438,14 @@ impl Transport for ConnectedTcp {
 
                 self.stream.borrow_mut().read_exact(&mut header_buffer).await?;
 
-                header = Header::from_bytes(&header_buffer)?;
+                header = Header::from_bytes(&header_buffer).unwrap();
             }
 
             let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
             self.stream.borrow_mut().read_exact(&mut data_buffer).await?;
 
-            let res = T::from_bytes(&data_buffer)?;
+            let res = T::from_bytes(&data_buffer).unwrap();
 
             Ok(res)
         };
@@ -477,7 +477,7 @@ impl Transport for ConnectedTcp {
             loop {
                 stream.read_exact(&mut header_buffer).await?;
     
-                let header = Header::from_bytes(&header_buffer)?;
+                let header = Header::from_bytes(&header_buffer).unwrap();
     
                 if header.message_type == MessageType::EndResponse {
                     break;
@@ -488,7 +488,7 @@ impl Transport for ConnectedTcp {
                 
                 stream.read_exact(&mut data_buffer).await?;
     
-                let res = T::from_bytes(&data_buffer)?;
+                let res = T::from_bytes(&data_buffer).unwrap();
     
                 ret.push(res);
             }

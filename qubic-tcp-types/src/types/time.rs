@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use core::fmt::{Debug, Display};
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,13 +14,13 @@ pub struct QubicTime {
 }
 
 impl Debug for QubicTime {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_fmt(format_args!("{}/{:0>2}/{:0>2} {:0>2}:{:0>2}:{:0>2}", 2000 + self.year as u16, self.month, self.day, self.hour, self.minute, self.seconds))
     }
 }
 
 impl Display for QubicTime {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_fmt(format_args!("{}/{:0>2}/{:0>2} {:0>2}:{:0>2}:{:0>2}", 2000 + self.year as u16, self.month, self.day, self.hour, self.minute, self.seconds))
     }
 }

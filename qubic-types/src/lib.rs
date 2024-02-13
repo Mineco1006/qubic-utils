@@ -1,7 +1,9 @@
+#![no_std]
 #[cfg(test)]
 mod tests;
 mod impls;
 pub mod errors;
+pub extern crate alloc;
 
 #[cfg(feature = "serde")]
 mod serde_impl;

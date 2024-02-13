@@ -1,7 +1,9 @@
-use std::ptr::read_unaligned;
-use kangarootwelve::KangarooTwelve;
+use core::ptr::read_unaligned;
+use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
 use crate::errors::QubicError;
 use crate::{QubicWallet, Signature};
+
+use alloc::vec::Vec;
 
 use crate::{errors::ByteEncodingError, QubicId};
 
@@ -16,15 +18,15 @@ pub trait FromBytes where Self: Sized {
 impl<T: Copy> ToBytes for T {
     fn to_bytes(&self) -> Vec<u8> {
         unsafe {
-            core::slice::from_raw_parts(self as *const T as *const u8, std::mem::size_of::<T>()).to_vec()
+            core::slice::from_raw_parts(self as *const T as *const u8, core::mem::size_of::<T>()).to_vec()
         }
     }
 }
 
 impl<T: Copy> FromBytes for T {
     fn from_bytes(data: &[u8]) -> Result<Self, ByteEncodingError> {
-        if data.len() != std::mem::size_of::<Self>() {
-            return Err(ByteEncodingError::InvalidDataLength { expected: std::mem::size_of::<Self>(), found: data.len() })
+        if data.len() != core::mem::size_of::<Self>() {
+            return Err(ByteEncodingError::InvalidDataLength { expected: core::mem::size_of::<Self>(), found: data.len() })
         }
 
         Ok(
@@ -64,13 +66,14 @@ impl<T> Sign for T
         let mut bytes = self.to_bytes();
 
         let mut digest = [0; 32];
-        let mut kg = KangarooTwelve::hash(&bytes[..bytes.len() - std::mem::size_of::<Signature>()], &[]);
-        kg.squeeze(&mut digest);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&bytes[..bytes.len() - core::mem::size_of::<Signature>()]);
+        kg.into_xof().squeeze(&mut digest);
 
         let sig = wallet.sign(digest);
 
         let len = bytes.len();
-        bytes[len - std::mem::size_of::<Signature>()..len].copy_from_slice(&sig.to_bytes());
+        bytes[len - core::mem::size_of::<Signature>()..len].copy_from_slice(&sig.to_bytes());
 
         *self = T::from_bytes(&bytes).unwrap();
 
@@ -83,9 +86,10 @@ impl<T: ToBytes + GetSigner> VerifySignature for T {
         let mut digest = [0; 32];
 
         let bytes = self.to_bytes();
-        let signature = Signature(bytes[bytes.len() - std::mem::size_of::<Signature>()..bytes.len()].try_into().unwrap());
-        let mut kg = KangarooTwelve::hash(&bytes[..bytes.len() - std::mem::size_of::<Signature>()], &[]);
-        kg.squeeze(&mut digest);
+        let signature = Signature(bytes[bytes.len() - core::mem::size_of::<Signature>()..bytes.len()].try_into().unwrap());
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&bytes[..bytes.len() - core::mem::size_of::<Signature>()]);
+        kg.into_xof().squeeze(&mut digest);
 
         self.get_signer().verify_raw(digest, signature)
     }

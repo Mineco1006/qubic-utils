@@ -1,6 +1,7 @@
-use std::{num::NonZeroUsize, ptr::read_unaligned, fmt::Debug};
+use core::{num::NonZeroUsize, ptr::read_unaligned, fmt::Debug};
 
-use kangarootwelve::KangarooTwelve;
+use alloc::vec::Vec;
+use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
 use qubic_types::{QubicId, Signature, QubicTxHash, traits::{ToBytes, FromBytes, GetSigner}, Nonce};
 
 use crate::{MessageType, consts::NUMBER_OF_TRANSACTION_PER_TICK, utils::QubicRequest};
@@ -108,9 +109,10 @@ set_message_type!(RequestedTickTransactions, MessageType::RequestTickTransaction
 impl From<Transaction> for QubicTxHash {
     fn from(val: Transaction) -> Self {
         let mut hash = [0; 32];
-        let mut kg = KangarooTwelve::hash(&val.to_bytes(), &[]);
-
-        kg.squeeze(&mut hash);
+        let tx_bytes = val.to_bytes();
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&tx_bytes);
+        kg.into_xof().squeeze(&mut hash);
 
         QubicTxHash(hash)
     }
@@ -119,9 +121,10 @@ impl From<Transaction> for QubicTxHash {
 impl<T: Copy> From<Call<T>> for QubicTxHash {
     fn from(val: Call<T>) -> Self {
         let mut hash = [0; 32];
-        let mut kg = KangarooTwelve::hash(&val.to_bytes(), &[]);
-
-        kg.squeeze(&mut hash);
+        let call_bytes = val.to_bytes();
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&call_bytes);
+        kg.into_xof().squeeze(&mut hash);
 
         QubicTxHash(hash)
     }
@@ -173,8 +176,8 @@ impl ToBytes for TransactionWithData {
 
 impl FromBytes for TransactionWithData {
     fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
-        if data.len() < std::mem::size_of::<RawTransaction>() + std::mem::size_of::<Signature>() {
-            return Err(qubic_types::errors::ByteEncodingError::InvalidMinimumDataLength { expected_min: std::mem::size_of::<RawTransaction>() + std::mem::size_of::<Signature>(), found: data.len() })
+        if data.len() < core::mem::size_of::<RawTransaction>() + core::mem::size_of::<Signature>() {
+            return Err(qubic_types::errors::ByteEncodingError::InvalidMinimumDataLength { expected_min: core::mem::size_of::<RawTransaction>() + core::mem::size_of::<Signature>(), found: data.len() })
         }
 
         let raw_tx = unsafe {
@@ -182,16 +185,16 @@ impl FromBytes for TransactionWithData {
         };
 
         let sig = unsafe {
-            read_unaligned(&data[data.len() - std::mem::size_of::<Signature>()] as *const u8 as *const Signature)
+            read_unaligned(&data[data.len() - core::mem::size_of::<Signature>()] as *const u8 as *const Signature)
         };
 
-        let tx_data = data[std::mem::size_of::<RawTransaction>()..data.len()-std::mem::size_of::<Signature>()].to_vec();
+        let tx_data = data[core::mem::size_of::<RawTransaction>()..data.len()-core::mem::size_of::<Signature>()].to_vec();
 
         let data;
 
         match raw_tx.input_type {
             0 => {
-                if raw_tx.input_size as usize == std::mem::size_of::<Nonce>() && tx_data.len() == std::mem::size_of::<Nonce>() && raw_tx.amount == 0 {
+                if raw_tx.input_size as usize == core::mem::size_of::<Nonce>() && tx_data.len() == core::mem::size_of::<Nonce>() && raw_tx.amount == 0 {
                     data = TransactionData::SubmitWork(Nonce(tx_data.try_into().unwrap()));
                 } else if raw_tx.input_size == 16 {
                     let bid = unsafe {
@@ -204,7 +207,7 @@ impl FromBytes for TransactionWithData {
                 }
             },
             1 => {
-                if raw_tx.input_size as usize == std::mem::size_of::<IssueAssetInput>() {
+                if raw_tx.input_size as usize == core::mem::size_of::<IssueAssetInput>() {
                     let input = unsafe {
                         read_unaligned(tx_data.as_ptr() as *const IssueAssetInput)
                     };
@@ -215,7 +218,7 @@ impl FromBytes for TransactionWithData {
                 }
             },
             2 => {
-                if raw_tx.input_size as usize == std::mem::size_of::<IssueAssetInput>() {
+                if raw_tx.input_size as usize == core::mem::size_of::<IssueAssetInput>() {
                     let input = unsafe {
                         read_unaligned(tx_data.as_ptr() as *const TransferAssetInput)
                     };
@@ -245,9 +248,10 @@ impl GetSigner for TransactionWithData {
 impl From<TransactionWithData> for QubicTxHash {
     fn from(val: TransactionWithData) -> Self {
         let mut hash = [0; 32];
-        let mut kg = KangarooTwelve::hash(&val.to_bytes(), &[]);
-
-        kg.squeeze(&mut hash);
+        let tx_bytes = val.to_bytes();
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&tx_bytes);
+        kg.into_xof().squeeze(&mut hash);
 
         QubicTxHash(hash)
     }

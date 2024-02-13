@@ -1,10 +1,13 @@
 #[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::{_subborrow_u64, _addcarry_u64};
+use core::arch::x86_64::{_subborrow_u64, _addcarry_u64};
 
-use std::{ptr::copy_nonoverlapping, fmt::{Debug, Display}, str::FromStr};
+use alloc::{format, string::String};
+use alloc::vec::Vec;
+
+use core::{ptr::copy_nonoverlapping, fmt::{Debug, Display}, str::FromStr};
 
 use four_q::{types::PointAffine, ops::{ecc_mul_fixed, encode, decode, ecc_mul, montgomery_multiply_mod_order, ecc_mul_double}, consts::{MONTGOMERY_R_PRIME, ONE, CURVE_ORDER_0, CURVE_ORDER_1, CURVE_ORDER_3, CURVE_ORDER_2}};
-use kangarootwelve::KangarooTwelve;
+use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
 
 use crate::{QubicId, errors::QubicError, Signature, QubicWallet, traits::ToBytes, Nonce, QubicTxHash};
 
@@ -103,8 +106,9 @@ impl QubicId {
         }
 
         let mut identity_bytes_checksum = [0u8; 3];
-        let mut kg = KangarooTwelve::hash(&self.0, &[]);
-        kg.squeeze(&mut identity_bytes_checksum);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&self.0);
+        kg.into_xof().squeeze(&mut identity_bytes_checksum);
         let mut identity_bytes_checksum = identity_bytes_checksum[0] as u64 | (identity_bytes_checksum[1] as u64) << 8 | (identity_bytes_checksum[2] as u64) << 16;
         identity_bytes_checksum &= 0x3FFFF;
         for i in 0..4 {
@@ -127,8 +131,9 @@ impl QubicId {
         }
 
         let mut identity_bytes_checksum = [0u8; 3];
-        let mut kg = KangarooTwelve::hash(&self.0, &[]);
-        kg.squeeze(&mut identity_bytes_checksum);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&self.0);
+        kg.into_xof().squeeze(&mut identity_bytes_checksum);
         let mut identity_bytes_checksum = identity_bytes_checksum[0] as u64 | (identity_bytes_checksum[1] as u64) << 8 | (identity_bytes_checksum[2] as u64) << 16;
         identity_bytes_checksum &= 0x3FFFF;
         for i in 0..4 {
@@ -196,9 +201,10 @@ impl QubicId {
     #[inline]
     pub fn verify<T: ToBytes>(&self, message: T, signature: Signature) -> bool {
         let mut digest: [u8; 32] = [0; 32];
-        let mut kg = KangarooTwelve::hash(&message.to_bytes(), &[]);
-
-        kg.squeeze(&mut digest);
+        let msg_bytes = message.to_bytes();
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&msg_bytes);
+        kg.into_xof().squeeze(&mut digest);
 
         self.verify_raw(digest, signature)
     }
@@ -239,8 +245,9 @@ impl QubicId {
 
         let mut sig: [u64; 8] = signature.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
         
-        let mut kg = KangarooTwelve::hash(&temp, &[]);
-        kg.squeeze(&mut h);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&temp);
+        kg.into_xof().squeeze(&mut h);
 
 
         let mut h: [u64; 8] = h.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
@@ -261,14 +268,14 @@ impl QubicId {
 }
 
 impl Debug for QubicId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let id = self.get_identity();
         f.write_str(&format!("{}...{}", &id[..5], &id[55..]))
     }
 }
 
 impl Display for QubicId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(&self.get_identity())
     }
 }
@@ -311,8 +318,9 @@ impl QubicWallet {
         }
 
         let mut subseed = [0u8; 32];
-        let mut kg = kangarootwelve::KangarooTwelve::hash(&seed_bytes, &[]);
-        kg.squeeze(&mut subseed);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&seed_bytes);
+        kg.into_xof().squeeze(&mut subseed);
         
 
         Ok(subseed)
@@ -322,8 +330,9 @@ impl QubicWallet {
     #[inline(always)]
     pub fn get_private_key(subseed: &[u8; 32]) -> [u8; 32] {
         let mut pk = [0u8; 32];
-        let mut kg = KangarooTwelve::hash(subseed, &[]);
-        kg.squeeze(&mut pk);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(subseed);
+        kg.into_xof().squeeze(&mut pk);
 
         pk
     }
@@ -398,8 +407,10 @@ impl QubicWallet {
     /// ```
     pub fn sign<T: ToBytes>(&self, message: T) -> Signature {
         let mut message_digest = [0; 32];
-        let mut kg = KangarooTwelve::hash(&message.to_bytes(), &[]);
-        kg.squeeze(&mut message_digest);
+        let msg_bytes = message.to_bytes();
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&msg_bytes);
+        kg.into_xof().squeeze(&mut message_digest);
 
         self.sign_raw(message_digest)
     }
@@ -418,8 +429,9 @@ impl QubicWallet {
         let mut r_a = PointAffine::default();
         let (mut k, mut h, mut temp) = ([0u8; 64], [0u8; 64], [0u8; 96]);
         let mut r = [0u8; 64];
-        let mut kg = KangarooTwelve::hash(&self.subseed, &[]);
-        kg.squeeze(&mut k);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&self.subseed);
+        kg.into_xof().squeeze(&mut k);
 
         let mut signature = [0u8; 64];
 
@@ -427,9 +439,10 @@ impl QubicWallet {
             copy_nonoverlapping(k.as_ptr().offset(32), temp.as_mut_ptr().offset(32), 32);
             copy_nonoverlapping(message_digest.as_ptr(), temp.as_mut_ptr().offset(64), 32);
 
-            let mut kg = KangarooTwelve::hash(&temp[32..], &[]);
+            let mut kg = KangarooTwelve::new(b"");
+            kg.update(&temp[32..]);
             let mut im = [0u8; 64];
-            kg.squeeze(&mut im);
+            kg.into_xof().squeeze(&mut im);
 
             copy_nonoverlapping(im.as_ptr(), r.as_mut_ptr(), 64);
             let k: [u64; 8] = k.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
@@ -442,8 +455,9 @@ impl QubicWallet {
             copy_nonoverlapping(signature_i.as_ptr() as *mut u8, temp.as_mut_ptr(), 32);
             copy_nonoverlapping(self.public_key.0.as_ptr(), temp.as_mut_ptr().offset(32), 32);
 
-            let mut kg = KangarooTwelve::hash(&temp, &[]);
-            kg.squeeze(&mut h);
+            let mut kg = KangarooTwelve::new(b"");
+            kg.update(&temp);
+            kg.into_xof().squeeze(&mut h);
             
             let mut h: [u64; 8] = h.chunks_exact(8).map(|c| u64::from_le_bytes(c.try_into().unwrap())).collect::<Vec<_>>().try_into().unwrap();
             let r_i = r;
@@ -475,26 +489,34 @@ impl QubicWallet {
 }
 
 impl Debug for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(self.0)))
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut hex_slice = [0; 128];
+        hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
+        f.write_str(&format!("0x{}", String::from_utf8(hex_slice.to_vec()).unwrap()))
     }
 }
 
 impl Display for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(self.0)))
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut hex_slice = [0; 128];
+        hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
+        f.write_str(&format!("0x{}", String::from_utf8(hex_slice.to_vec()).unwrap()))
     }
 }
 
 impl Debug for Nonce {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(self.0)))
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {  
+        let mut hex_slice = [0; 64];
+        hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
+        f.write_str(&format!("0x{}", String::from_utf8(hex_slice.to_vec()).unwrap()))
     }
 }
 
 impl Display for Nonce {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("0x{}", hex::encode(self.0)))
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut hex_slice = [0; 64];
+        hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
+        f.write_str(&format!("0x{}", String::from_utf8(hex_slice.to_vec()).unwrap()))
     }
 }
 
@@ -545,8 +567,9 @@ impl QubicTxHash {
         }
 
         let mut identity_bytes_checksum = [0u8; 3];
-        let mut kg = KangarooTwelve::hash(&self.0, &[]);
-        kg.squeeze(&mut identity_bytes_checksum);
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&self.0);
+        kg.into_xof().squeeze(&mut identity_bytes_checksum);
         let mut identity_bytes_checksum = identity_bytes_checksum[0] as u64 | (identity_bytes_checksum[1] as u64) << 8 | (identity_bytes_checksum[2] as u64) << 16;
         identity_bytes_checksum &= 0x3FFFF;
         for i in 0..4 {
@@ -591,14 +614,14 @@ impl FromStr for QubicTxHash {
 }
 
 impl Debug for QubicTxHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let id = self.get_identity();
         f.write_str(&format!("{}...{}", &id[..5], &id[55..]))
     }
 }
 
 impl Display for QubicTxHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(&self.get_identity())
     }
 }

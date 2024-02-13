@@ -1,3 +1,5 @@
+use alloc::string::String;
+use alloc::vec::Vec;
 use qubic_types::Signature;
 use crate::consts::NUMBER_OF_COMPUTORS;
 
@@ -21,6 +23,7 @@ pub struct CommandDescriptor {
     pub nonce: [u8; 7]
 }
 
+#[cfg(feature = "std")]
 impl CommandDescriptor {
     pub fn new(command_type: CommandType) -> Self {
         let mut nonce = [0u8; 7];

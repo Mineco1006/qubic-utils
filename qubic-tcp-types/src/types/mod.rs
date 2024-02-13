@@ -7,8 +7,9 @@ pub mod token;
 pub mod assets;
 pub mod special_commands;
 
-use std::net::Ipv4Addr;
+use core::net::Ipv4Addr;
 
+use alloc::vec::Vec;
 use qubic_types::{QubicId, Signature, Nonce, traits::ToBytes};
 
 use crate::{utils::QubicRequest, Header, MessageType};
@@ -142,10 +143,11 @@ pub struct Packet<T> {
     pub data: T
 }
 
+#[cfg(feature = "std")]
 impl<T: Sized + QubicRequest> Packet<T> {
     pub fn new(data: T, randomize_dejavu: bool) -> Packet<T> {
         Self {
-            header: Header::new(std::mem::size_of::<Header>() + std::mem::size_of_val(&data), T::get_message_type(), randomize_dejavu),
+            header: Header::new(core::mem::size_of::<Header>() + core::mem::size_of_val(&data), T::get_message_type(), randomize_dejavu),
             data
         }
     }

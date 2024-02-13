@@ -1,5 +1,6 @@
-use std::{fmt::Debug, str::FromStr};
+use core::{fmt::Debug, str::FromStr};
 
+use alloc::string::{String, ToString};
 use qubic_types::QubicId;
 
 #[cfg(feature = "serde")]
@@ -17,7 +18,7 @@ macro_rules! generate_packed_integers {
         $(
             #[derive(Clone, Copy, PartialEq, Eq, Hash)]
             #[repr(C)]
-            pub struct $name([u8; std::mem::size_of::<$alias>()]);
+            pub struct $name([u8; core::mem::size_of::<$alias>()]);
 
             impl ToString for $name {
                 fn to_string(&self) -> String {
@@ -26,7 +27,7 @@ macro_rules! generate_packed_integers {
             }
             
             impl Debug for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                     f.write_str(&self.to_string())?;
             
                     Ok(())
@@ -62,7 +63,7 @@ pub struct AssetNameVisitor<const LEN: usize>;
 impl<'de, const LEN: usize> Visitor<'de> for AssetNameVisitor<LEN> {
     type Value = AssetName<LEN>;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str(&format!("Expected {LEN} character string"))
     }
 
@@ -135,7 +136,7 @@ impl<const LEN: usize> ToString for AssetName<LEN> {
 }
 
 impl<const LEN: usize> Debug for AssetName<LEN> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(&self.to_string())?;
 
         Ok(())

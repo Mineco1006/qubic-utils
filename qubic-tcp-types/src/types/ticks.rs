@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 use qubic_types::{Signature, H256, QubicTxHash};
 
@@ -68,7 +68,7 @@ impl From<&VarStructBuffer> for BallotOrProposal {
 }
 
 impl Debug for VarStructBuffer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let bop: BallotOrProposal = self.into();
         write!(f, "{bop:?}")
     }

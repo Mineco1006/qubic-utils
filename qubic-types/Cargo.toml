@@ -6,13 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror = "*"
+thiserror-no-std = "*"
 four-q = { path = "../four-q-rs" }
-kangarootwelve = "0.1.2"
-serde = { version = "*", features = ["derive"]}
-ethereum-types = "0.14.1"
-hex = "*"
-wasm-bindgen = "*"
+tiny-keccak = { version = "2.0", default-features = false, features = ["k12"]}
+serde = { version = "*", default-features = false, features = ["derive"]}
+ethereum-types = { version = "0.14.1", default-features = false}
+hex = { version = "*", default-features = false, features = ["serde"]}
 
 [features]
+default = ["serde"]
 serde = []

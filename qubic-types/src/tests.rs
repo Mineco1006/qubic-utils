@@ -1,3 +1,5 @@
+use core::str::FromStr;
+
 use crate::{QubicId, QubicWallet};
 
 const SEED: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -6,7 +8,6 @@ const ID: &str = "BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK";
 /// Test public key generation from 60 character ID
 #[test]
 pub fn test_id() {
-    use std::str::FromStr;
     let pk = QubicId::from_str(ID).unwrap();
 
     assert_eq!(pk.0, [31, 89, 13, 3, 230, 19, 189, 222, 211, 139, 76, 8, 32, 172, 68, 97, 95, 145, 175, 18, 67, 89, 128, 179, 237, 227, 192, 140, 49, 90, 37, 68]);
@@ -16,7 +17,6 @@ pub fn test_id() {
 // Test wallet signature & public key generation from 55 character seed
 #[test]
 pub fn test_wallet() {
-    use std::str::FromStr;
     let wallet = QubicWallet::from_seed(SEED).unwrap();
 
     assert_eq!(wallet.get_identity(), ID);

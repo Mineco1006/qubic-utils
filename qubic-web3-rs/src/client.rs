@@ -1,4 +1,4 @@
-use std::{ptr::{copy_nonoverlapping, read_unaligned}, net::Ipv4Addr, str::FromStr, time::Duration};
+use std::{ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Duration};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{thread::JoinHandle, io::{Write, Read}};
@@ -568,7 +568,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                             event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
                         },
                         MessageType::BroadcastTransaction => {
-                            let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()])?;
+                            let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()]).unwrap();
 
                             event_handler(NetworkEvent::BroadcastTransaction(tx))?;
                         },
@@ -656,7 +656,7 @@ impl<'a, T: Transport> Qx<'a, T> {
                     possessor,
                     issuer: QubicId::default(),
                     new_owner: to,
-                    asset_name: AssetName::from_str("QX")?,
+                    asset_name: AssetName::from_str("QX").unwrap(),
                     number_of_units: units
                 }
             },
@@ -690,7 +690,7 @@ impl<'a, T: Transport> Qx<'a, T> {
             raw_call: RawCall {
                 tx,
                 input: IssueAssetInput {
-                    name: AssetName::from_str(name)?,
+                    name: AssetName::from_str(name).unwrap(),
                     number_of_units,
                     unit_of_measurement: u64::from_le_bytes(padded_uom),
                     number_of_decimal_places
@@ -724,7 +724,7 @@ impl<'a, T: Transport> Qx<'a, T> {
                     possessor,
                     issuer,
                     new_owner: to,
-                    asset_name: AssetName::from_str(name)?,
+                    asset_name: AssetName::from_str(name).unwrap(),
                     number_of_units: units
                 }
             },

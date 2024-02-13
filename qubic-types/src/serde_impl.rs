@@ -1,4 +1,5 @@
-use std::str::FromStr;
+use core::str::FromStr;
+use alloc::{format, string::{String, ToString}};
 
 use serde::{Serialize, Deserialize, de::Visitor};
 
@@ -10,7 +11,7 @@ struct QubicIdVisitor;
 impl<'de> Visitor<'de> for QubicIdVisitor {
     type Value = QubicId;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("60 uppercase character alphabetic ASCII string")
     }
 
@@ -50,7 +51,7 @@ struct QubicTxHashVisitor;
 impl<'de> Visitor<'de> for QubicTxHashVisitor {
     type Value = QubicTxHash;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("60 lowercase character alphabetic ASCII string")
     }
 
@@ -91,7 +92,7 @@ struct HexVisitor<const LENGTH: usize>;
 impl<'de, const LENGTH: usize> Visitor<'de> for HexVisitor<LENGTH> {
     type Value = [u8; LENGTH];
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("0x prefixed hexadecimal string")
     }
 
