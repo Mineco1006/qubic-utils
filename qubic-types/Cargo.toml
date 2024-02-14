@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror-no-std = "*"
+thiserror-no-std = { version = "*" }
+thiserror = { version = "*", optional = true }
 four-q = { path = "../four-q-rs" }
 tiny-keccak = { version = "2.0", default-features = false, features = ["k12"]}
 serde = { version = "*", default-features = false, features = ["derive"]}
@@ -14,5 +15,6 @@ ethereum-types = { version = "0.14.1", default-features = false}
 hex = { version = "*", default-features = false, features = ["serde"]}
 
 [features]
-default = ["serde"]
+default = ["serde", "std"]
+std = ["serde/default", "hex/default", "ethereum-types/default", "dep:thiserror"]
 serde = []

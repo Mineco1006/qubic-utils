@@ -168,8 +168,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet)?)
     }
 
-    pub fn exchange_public_peers(&self, peers: [Ipv4Addr; 4]) -> Result<ExchangePublicPeers> {
-        let packet = Packet::new(ExchangePublicPeers { peers }, true);
+    pub fn exchange_public_peers(&self, peers: ExchangePublicPeers) -> Result<ExchangePublicPeers> {
+        let packet = Packet::new(peers, true);
 
         Ok(self.transport.send_with_response(packet)?)
     }

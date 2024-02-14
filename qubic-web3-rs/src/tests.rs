@@ -6,7 +6,7 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "80.155.26.222:21841";
+const COMPUTOR: &str = "91.208.92.59:21841";
 const TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
