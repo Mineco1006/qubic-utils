@@ -97,7 +97,7 @@ async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<
         RequestMethods::RequestEntity(id) => {
             let res = result_or_501!(client.qu().request_entity(id), rpc_method);
 
-            early_return_result!(RequestResults::RequestEntity(res), rpc_method);
+            early_return_result!(RequestResults::RequestEntity(res.entity), rpc_method);
         },
         RequestMethods::SendTransaction(tx) => {
             result_or_501!(client.qu().send_signed_transaction(tx), rpc_method);
@@ -114,6 +114,7 @@ async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<
 
 #[tokio::test]
 async fn test() {
+    use std::str::FromStr;
     use qubic_types::QubicId;
     const RPC: &str = "http://127.0.0.1:2003/";
 

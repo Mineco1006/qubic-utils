@@ -1,6 +1,5 @@
 {
     "rust-analyzer.cargo.features": [
-        "async"
     ],
     "rust-analyzer.check.command": "check"
 }

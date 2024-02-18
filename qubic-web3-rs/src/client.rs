@@ -4,7 +4,7 @@ use std::{ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Durati
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{types::{Packet, BroadcastMessage, RequestComputors, Computors, RequestEntity, ContractIpo, RequestContractIpo, ExchangePublicPeers, transactions::{RawTransaction, Transaction}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, assets::{RespondOwnedAsset, RequestOwnedAsset, QXID, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, IssueAssetInput, AssetName, RespondIssuedAsset, RequestIssuedAsset, RespondPossessedAsset, RequestPossessedAsset, TRANSFER_FEE}, ContractIpoBid}, MessageType, events::NetworkEvent, Header};
+use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, transactions::{RawTransaction, Transaction}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RespondedEntity}, Header, MessageType};
 use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
@@ -144,7 +144,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet)?)
     }
 
-    pub fn request_entity(&self, public_key: QubicId) -> Result<Entity> {
+    pub fn request_entity(&self, public_key: QubicId) -> Result<RespondedEntity> {
         let packet = Packet::new(RequestEntity { public_key }, true);
         
         Ok(self.transport.send_with_response(packet)?)

@@ -22,7 +22,7 @@ fn test() {
     let current_tick = dbg!(client.qu().get_current_tick_info().unwrap());
     let to = QubicId::from_str("BGKBSSHTGNLYOBUNOBYZNPEYDNABWKCHIWGOOUJRTGJOXTYPPWSXMGUAXHKI").unwrap();
     let wallet = QubicWallet::from_seed(seed).unwrap();
-    let entity = dbg!(client.qu().request_entity(to).unwrap());
+    let entity = dbg!(client.qu().request_entity(to).unwrap().entity);
     println!("{}", entity.public_key);
     println!("Balance: {}", entity.balance());
 

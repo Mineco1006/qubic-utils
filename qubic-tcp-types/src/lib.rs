@@ -55,7 +55,7 @@ pub struct Header {
     pub dejavu: u32,
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "wasm"))]
 impl Header {
 
     pub fn new(size: usize, message_type: MessageType, randomize_dejavu: bool) -> Self {

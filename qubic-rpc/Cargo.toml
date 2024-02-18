@@ -8,14 +8,14 @@ edition = "2021"
 [dependencies]
 qubic-types = { path = "../qubic-types" }
 qubic-web3-rs = { path = "../qubic-web3-rs" }
-axum = "*"
+axum = "0.7"
 tokio = { version = "*", features = ["full"] }
 serde = { version = "*", features = ["derive"] }
 hex = "*"
 log = "*"
 env_logger = "*"
 qubic-rpc-types = { path="../qubic-rpc-types" }
-tower-http = { version = "*", features = ["cors"]}
+tower-http = { version = "0.5", features = ["cors"]}
 clap = { version = "4.4.7", features = ["derive"]}
 crossbeam-channel = "*"
 

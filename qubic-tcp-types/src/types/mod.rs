@@ -12,7 +12,7 @@ use core::net::Ipv4Addr;
 use alloc::vec::Vec;
 use qubic_types::{QubicId, Signature, Nonce, traits::ToBytes};
 
-use crate::{utils::QubicRequest, Header, MessageType};
+use crate::{consts::SPECTRUM_DEPTH, utils::QubicRequest, Header, MessageType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -57,6 +57,18 @@ set_message_type!(RequestEntity, MessageType::RequestEntity);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
+pub struct RespondedEntity {
+    pub entity: Entity,
+    pub tick: u32,
+    pub spectrum_index: u32,
+    pub siblings: [QubicId; SPECTRUM_DEPTH]
+}
+
+set_message_type!(RespondedEntity, MessageType::RespondEntity);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(C)]
 pub struct Entity {
     pub public_key: QubicId,
     pub incoming_amount: u64,
@@ -66,8 +78,6 @@ pub struct Entity {
     pub latest_incoming_transfer_tick: u32,
     pub latest_outgoing_transfer_tick: u32
 }
-
-set_message_type!(Entity, MessageType::RespondEntity);
 
 impl Entity {
     pub fn balance(&self) -> u64 {
