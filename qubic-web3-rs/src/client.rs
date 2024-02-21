@@ -1,10 +1,10 @@
-use std::{ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Duration};
+use std::{marker::PhantomData, ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Duration};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, transactions::{RawTransaction, Transaction}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RespondedEntity}, Header, MessageType};
+use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, qlogging::{QubicLog, RequestLog}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, transactions::{RawTransaction, Transaction}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RespondedEntity}, Header, MessageType};
 use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
@@ -13,6 +13,38 @@ use rand::Rng;
 
 #[cfg(any(feature = "async", feature = "http"))]
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
+
+#[derive(Debug, Clone)]
+pub struct ClientBuilder<T: Transport> {
+    pd: PhantomData<T>,
+    url: String,
+    timeout: Option<std::time::Duration>
+}
+
+impl<T: Transport> ClientBuilder<T> {
+    pub fn new(url: impl ToString) -> Self {
+        Self {
+            pd: PhantomData,
+            url: url.to_string(),
+            timeout: None
+        }
+    }
+
+    /// specifies the read and write timeout for a connection, if not set the Transport will set the timeout to it's default value (5 seconds)
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.timeout = Some(timeout);
+
+        self
+    }
+
+    pub fn build(self) -> Result<Client<T>, T::Err> {
+        Ok(
+            Client {
+                transport: T::new(self.url, self.timeout)?
+            }
+        )
+    }
+}
 
 
 #[derive(Debug, Clone)]
@@ -24,7 +56,7 @@ pub struct Client<T: Transport> {
 impl<T> Client<T> where T: Transport {
     pub fn new(url: impl ToString) -> Result<Self, T::Err> {
         Ok(Self {
-            transport: T::new(url.to_string())?
+            transport: T::new(url.to_string(), None)?
         })
     }
 
@@ -213,7 +245,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let _: JoinHandle<Result<()>> = std::thread::Builder::new().name("qubic-event-handler".to_string()).stack_size(10_000_000).spawn(move || {
             let event_handler = event_handler;
             let url = url;
-            if let Ok(transport) = T::new(url.clone()) {
+            if let Ok(transport) = T::new(url.clone(), None) {
                 let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
                 let mut data_buffer = vec![0u8; 10_000_000];
 
@@ -296,6 +328,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
         self.transport.send_without_response(packet)?;
         Ok(call.into())
+    }
+
+    pub fn request_log(&self, passcode: [u64; 4]) -> Result<QubicLog> {
+        let packet = Packet::new(RequestLog { passcode }, true);
+
+        Ok(self.transport.send_with_response(packet)?)
     }
 }
 
