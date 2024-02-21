@@ -6,6 +6,7 @@ pub mod time;
 pub mod token;
 pub mod assets;
 pub mod special_commands;
+pub mod qlogging;
 
 use core::net::Ipv4Addr;
 

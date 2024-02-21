@@ -70,7 +70,7 @@ pub struct QubicId(pub [u8; 32]);
 /// 
 /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 /// 
-/// let data: u64 = 1006; // can be any data that derives std::marker::Copy or implements qubic_types::traits::AsByteEncoded
+/// let data: u64 = 1006; // can be any data type that implements ToBytes
 /// 
 /// let signature = wallet.sign(&data);
 /// ```

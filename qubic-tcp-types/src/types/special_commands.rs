@@ -1,9 +1,14 @@
+use core::str::FromStr;
+
 use alloc::string::String;
 use alloc::vec::Vec;
+use qubic_types::traits::{FromBytes, ToBytes};
 use qubic_types::Signature;
 use crate::consts::NUMBER_OF_COMPUTORS;
 
 use crate::utils::QubicRequest;
+
+use super::time::QubicSetUtcTime;
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,6 +19,21 @@ pub enum CommandType {
     SpecialCommandGetProposalAndBallotResponse = 2,
     SpecialCommandSetProposalAndBallotRequest  = 3,
     SpecialCommandSetProposalAndBallotResponse = 4,
+    SpecialCommandSetSolutionThresholdRequest  = 5,
+    SpecialCommandSetSolutionThresholdResponse = 6,
+
+    /// F12
+    SpecialCommandToggleMainAuxRequest         = 7,
+    SpecialCommandToggleMainAuxResponse        = 8,
+    /// F4
+    SpecialCommandRefreshPeerList              = 9,
+    /// F5
+    SpecialCommandForceNextTick                = 10,
+    /// F9
+    SpecialCommandReissueVote                  = 11,
+
+    SpecialCommandQueryTime                    = 12,
+    SpecialCommandSendTime                     = 13
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,7 +63,6 @@ pub trait GetCommandType {
     fn get_command_type() -> CommandType;
 }
 
-#[macro_export]
 macro_rules! set_command_type {
     ($impl: ident, $message_type: expr) => {
         impl GetCommandType for $impl {
@@ -54,14 +73,34 @@ macro_rules! set_command_type {
     };
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct SpecialCommand<T: Copy> {
+pub struct SpecialCommand<T: ToBytes + FromBytes> {
     pub descriptor: CommandDescriptor,
     pub payload: T
 }
 
-impl<T: Copy> QubicRequest for SpecialCommand<T> {
+impl<T: ToBytes + FromBytes> ToBytes for SpecialCommand<T> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.descriptor.to_bytes();
+        bytes.extend(self.payload.to_bytes());
+        bytes
+    }
+}
+
+impl<T: ToBytes + FromBytes> FromBytes for SpecialCommand<T> {
+    fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
+        let desc = CommandDescriptor::from_bytes(&data[..core::mem::size_of::<CommandDescriptor>()])?;
+        let payload = T::from_bytes(&data[core::mem::size_of::<CommandDescriptor>()..])?;
+
+        Ok(Self {
+            descriptor: desc,
+            payload
+        })
+    }
+}
+
+impl<T: ToBytes + FromBytes> QubicRequest for SpecialCommand<T> {
     fn get_message_type() -> crate::MessageType {
         crate::MessageType::ProcessSpecialCommand
     }
@@ -181,3 +220,29 @@ struct SetProposalAndBallotResponse {
 }
 
 set_command_type!(SetProposalAndBallotResponse, CommandType::SpecialCommandSetProposalAndBallotResponse);
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum NodeMode {
+    Aux = 0,
+    Main = 1
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct ToggleMainMode {
+    pub mode: NodeMode
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct SetEpochParams {
+    pub epoch: u32,
+    pub treshold: i32
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct SetTime {
+    pub time: QubicSetUtcTime
+}

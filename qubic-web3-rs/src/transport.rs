@@ -18,7 +18,7 @@ use tokio::io::{AsyncWriteExt, AsyncReadExt};
 pub trait Transport {
     type Err;
 
-    fn new(url: String) -> Result<Box<Self>, Self::Err>;
+    fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err>;
 
     fn send_without_response(&self, data: impl ToBytes) -> Result<()>;
 
@@ -50,8 +50,10 @@ pub trait Transport {
 
 pub struct Tcp {
     pub(crate) url: String,
+    pub(crate) timeout: Duration
 }
 
+/// Default timeout: 5s
 #[cfg(any(feature = "async", feature = "http"))]
 impl Transport for Tcp {
     type Err = Infallible;
@@ -162,15 +164,17 @@ impl Transport for Tcp {
 impl Transport for Tcp {
     type Err = Infallible;
 
-    fn new(url: String) -> Result<Box<Self>, Self::Err> {
+    /// defaults timeout to 5 seconds if parameter is None
+    fn new(url: String, timeout: Option<Duration>) -> Result<Box<Self>, Self::Err> {
         Ok(Box::new(Self {
-            url
+            url,
+            timeout: if let Some(timeout) = timeout { timeout } else { std::time::Duration::from_secs(5) }
         }))
     }
 
     fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
         let mut stream = TcpStream::connect(&self.url)?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_write_timeout(Some(self.timeout))?;
 
         stream.write_all(&data.to_bytes())?;
 
@@ -180,8 +184,8 @@ impl Transport for Tcp {
     fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T> {
         let mut stream = TcpStream::connect(&self.url)?;
 
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_read_timeout(Some(self.timeout))?;
+        stream.set_write_timeout(Some(self.timeout))?;
 
         let mut header_buffer = vec![0; std::mem::size_of::<Header>()];
         stream.write_all(&data.to_bytes())?;
@@ -203,6 +207,8 @@ impl Transport for Tcp {
             header = Header::from_bytes(&header_buffer)?;
         }
 
+        dbg!(header);
+
         let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
         stream.read_exact(&mut data_buffer)?;
@@ -217,8 +223,8 @@ impl Transport for Tcp {
 
         let mut stream = TcpStream::connect(&self.url)?;
 
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        stream.set_read_timeout(Some(self.timeout))?;
+        stream.set_write_timeout(Some(self.timeout))?;
 
         let mut header_buffer = vec![0; std::mem::size_of::<Packet<ExchangePublicPeers>>()];
         stream.write_all(&data.to_bytes())?;
@@ -258,20 +264,24 @@ impl Transport for Tcp {
 }
 
 pub struct ConnectedTcp {
-    pub stream: RefCell<TcpStream>
+    pub stream: RefCell<TcpStream>,
+    timeout: Duration
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 impl Transport for ConnectedTcp {
     type Err = std::io::Error;
 
-    fn new(url: String) -> Result<Box<Self>, Self::Err> {
+    fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err> {
         let stream = TcpStream::connect(&url)?;
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        let timeout = if let Some(timeout) = timeout { timeout } else { Duration::from_secs(5) };
+ 
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout))?;
         Ok(
             Box::new(Self {
-                stream: RefCell::new(stream)
+                stream: RefCell::new(stream),
+                timeout
             })
         )
     }
@@ -281,7 +291,10 @@ impl Transport for ConnectedTcp {
 
             // auto reconnection
             Err(e) => {
-                *self.stream.borrow_mut() = TcpStream::connect(self.get_url())?;
+                let stream = TcpStream::connect(self.get_url())?;
+                stream.set_read_timeout(Some(self.timeout))?;
+                stream.set_write_timeout(Some(self.timeout))?;
+                *self.stream.borrow_mut() = stream;
 
                 return Err(e.into())
             },
@@ -329,7 +342,10 @@ impl Transport for ConnectedTcp {
         match res {
             Ok(r) => Ok(r),
             Err(e) => {
-                *self.stream.borrow_mut() = TcpStream::connect(self.get_url())?;
+                let stream = TcpStream::connect(self.get_url())?;
+                stream.set_read_timeout(Some(self.timeout))?;
+                stream.set_write_timeout(Some(self.timeout))?;
+                *self.stream.borrow_mut() = stream;
 
                 Err(e.into())
             }
@@ -370,7 +386,10 @@ impl Transport for ConnectedTcp {
         match res {
             Ok(r) => Ok(r),
             Err(e) => {
-                *self.stream.borrow_mut() = TcpStream::connect(self.get_url())?;
+                let stream = TcpStream::connect(self.get_url())?;
+                stream.set_read_timeout(Some(self.timeout))?;
+                stream.set_write_timeout(Some(self.timeout))?;
+                *self.stream.borrow_mut() = stream;
 
                 Err(e.into())
             }

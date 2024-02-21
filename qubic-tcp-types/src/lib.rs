@@ -44,6 +44,12 @@ pub enum MessageType {
     RequestPossessedAsset = 40,
     RespondPossessedAsset = 41,
 
+    RequestContractFunction = 42,
+    RespondContractFunction = 43,
+
+    RequestLog = 44,
+    RespondLog = 45,
+
     ProcessSpecialCommand = 255
 }
 
