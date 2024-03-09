@@ -50,6 +50,9 @@ pub enum MessageType {
     RequestLog = 44,
     RespondLog = 45,
 
+    RequestSystemInfo = 46,
+    RespondSystemInfo = 47,
+
     ProcessSpecialCommand = 255
 }
 
