@@ -12,6 +12,7 @@ use core::net::Ipv4Addr;
 
 use alloc::vec::Vec;
 use qubic_types::{QubicId, Signature, Nonce, traits::ToBytes};
+use time::QubicTime;
 
 use crate::{consts::SPECTRUM_DEPTH, utils::QubicRequest, Header, MessageType};
 
@@ -173,3 +174,28 @@ impl<T: ToBytes> ToBytes for Packet<T> {
         buffer
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct RequestSystemInfo;
+
+set_message_type!(RequestSystemInfo, MessageType::RequestSystemInfo);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct SystemInfo {
+    pub version: i16,
+    pub epoch: u16,
+    pub tick: u32,
+    pub initial_tick: u32,
+    pub latest_created_tick: u32,
+
+    pub time: QubicTime,
+
+    pub number_of_entities: u32,
+    pub number_of_transactions: u32,
+
+    pub random_mining_seed: [u8; 32],
+}
+
+set_message_type!(SystemInfo, MessageType::RespondSystemInfo);

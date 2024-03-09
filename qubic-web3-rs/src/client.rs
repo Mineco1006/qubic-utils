@@ -4,7 +4,7 @@ use std::{marker::PhantomData, ptr::{copy_nonoverlapping, read_unaligned}, str::
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, qlogging::{QubicLog, RequestLog}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, transactions::{RawTransaction, Transaction}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RespondedEntity}, Header, MessageType};
+use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, qlogging::{QubicLog, RequestLog}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, transactions::{RawTransaction, Transaction}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity, SystemInfo}, Header, MessageType};
 use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
@@ -197,6 +197,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     pub fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<Tick> {
         let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
         
+        Ok(self.transport.send_with_response(packet)?)
+    }
+
+    pub fn request_system_info(&self) -> Result<SystemInfo> {
+        let packet = Packet::new(RequestSystemInfo, true);
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
