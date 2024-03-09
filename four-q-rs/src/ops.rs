@@ -34,7 +34,7 @@ use crate::{
     }};
 
 #[inline(always)]
-fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
+pub fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
     #[cfg(target_arch = "x86_64")]
     unsafe {
         _addcarry_u64(c_in, a, b, out)
@@ -52,7 +52,7 @@ fn addcarry_u64(c_in: u8, a: u64, b: u64, out: &mut u64) -> u8  {
 }
 
 #[inline(always)]
-fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
+pub fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
     #[cfg(target_arch = "x86_64")]
     unsafe {
         _subborrow_u64(b_in, a, b, out)
@@ -74,7 +74,7 @@ fn subborrow_u64(b_in: u8, a: u64, b: u64, out: &mut u64) -> u8 {
 #[inline(always)]
 pub fn mod1271(a: &mut FelmT) {
     subborrow_u64(subborrow_u64(0, a[0], 0xFFFFFFFFFFFFFFFF, &mut a[0]), a[1], 0x7FFFFFFFFFFFFFFF, &mut a[1]);
-    let mask = 0 - (a[1] >> 63);
+    let mask = 0u64.wrapping_sub(a[1] >> 63);
     addcarry_u64(addcarry_u64(0, a[0], mask, &mut a[0]), a[1], 0x7FFFFFFFFFFFFFFF & mask, &mut a[1]);
 }
 
@@ -211,12 +211,12 @@ pub fn fp2div1271(a: &mut F2elmT) {
     let mut mask: u64;
     let mut temp = [0u64; 2];
 
-    mask = 0 - (1 & a[0][0]);
+    mask = 0u64.wrapping_sub((1 & a[0][0]));
     addcarry_u64(addcarry_u64(0, a[0][0], mask, &mut temp[0]), a[0][1], mask >> 1, &mut temp[1]);
     a[0][0] = __shiftright128(temp[0], temp[1], 1);
     a[0][1] = temp[1] >> 1;
 
-    mask = 0 - (1 & a[1][0]);
+    mask = 0u64.wrapping_sub(1 & a[1][0]);
     addcarry_u64(addcarry_u64(0, a[1][0], mask, &mut temp[0]), a[1][1], mask >> 1, &mut temp[1]);
     a[1][0] = __shiftright128(temp[0], temp[1], 1);
     a[1][1] = temp[1] >> 1;
@@ -342,15 +342,15 @@ pub fn montgomery_multiply_mod_order(ma: &[u64], mb: &[u64], mc: &mut [u64]) {
         q[0] = _umul128(p[0], MONTGOMERY_SMALL_R_PRIME_0, &mut u);
         u = addcarry_u64(0, _umul128(p[0], MONTGOMERY_SMALL_R_PRIME_1, &mut uv), u, &mut q[1]) as u64 + uv;
         u = addcarry_u64(0, _umul128(p[0], MONTGOMERY_SMALL_R_PRIME_2, &mut uv), u, &mut q[2]) as u64 + uv;
-        addcarry_u64(0, p[0] * MONTGOMERY_SMALL_R_PRIME_3, u, &mut q[3]);
+        addcarry_u64(0,  p[0].wrapping_mul(MONTGOMERY_SMALL_R_PRIME_3), u, &mut q[3]);
         u = addcarry_u64(0, q[1], _umul128(p[1], MONTGOMERY_SMALL_R_PRIME_0, &mut uv), &mut q[1]) as u64 + uv;
         u = addcarry_u64(0, _umul128(p[1], MONTGOMERY_SMALL_R_PRIME_1, &mut uv), u, &mut v) as u64 + uv;
-        addcarry_u64(addcarry_u64(0, q[2], v, &mut q[2]), p[1] * MONTGOMERY_SMALL_R_PRIME_2, u, &mut v);
+        addcarry_u64(addcarry_u64(0, q[2], v, &mut q[2]), p[1].wrapping_mul(MONTGOMERY_SMALL_R_PRIME_2), u, &mut v);
         addcarry_u64(0, q[3], v, &mut q[3]);
         u = addcarry_u64(0, q[2], _umul128(p[2], MONTGOMERY_SMALL_R_PRIME_0, &mut uv), &mut q[2]) as u64 + uv;
-        addcarry_u64(0, p[2] * MONTGOMERY_SMALL_R_PRIME_1, u, &mut v);
+        addcarry_u64(0, p[2].wrapping_mul(MONTGOMERY_SMALL_R_PRIME_1), u, &mut v);
         addcarry_u64(0, q[3], v, &mut q[3]);
-        addcarry_u64(0, q[3], p[3] * MONTGOMERY_SMALL_R_PRIME_0, &mut q[3]);
+        addcarry_u64(0, q[3], p[3].wrapping_mul(MONTGOMERY_SMALL_R_PRIME_0), &mut q[3]);
 
         multiply(&q, &CURVE_ORDER, &mut temp); // temp = Q * r
 
@@ -358,7 +358,7 @@ pub fn montgomery_multiply_mod_order(ma: &[u64], mb: &[u64], mc: &mut [u64]) {
         let b = subborrow_u64(subborrow_u64(subborrow_u64(subborrow_u64(0, temp[4], CURVE_ORDER_0, &mut mc[0]), temp[5], CURVE_ORDER_1, &mut mc[1]), temp[6], CURVE_ORDER_2, &mut mc[2]), temp[7], CURVE_ORDER_3, &mut mc[3]);
 
         // temp not correct after addcarry
-        if a - b != 0
+        if a.wrapping_sub(b) != 0
         {
             addcarry_u64(addcarry_u64(addcarry_u64(addcarry_u64(0, mc[0], CURVE_ORDER_0, &mut mc[0]), mc[1], CURVE_ORDER_1, &mut mc[1]), mc[2], CURVE_ORDER_2, &mut mc[2]), mc[3], CURVE_ORDER_3, &mut mc[3]);
         }
@@ -554,7 +554,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
         scalar[3] >>= 1;
 
         for digit in digits.iter_mut().take(49) {
-            *digit = (scalar[0] & 1) - 1;  // Convention for the "sign" row: if scalar_(i+1) = 0 then digit_i = -1 (negative), else if scalar_(i+1) = 1 then digit_i = 0 (positive)
+            *digit = (scalar[0] & 1).wrapping_sub(1);  // Convention for the "sign" row: if scalar_(i+1) = 0 then digit_i = -1 (negative), else if scalar_(i+1) = 1 then digit_i = 0 (positive)
 
             // Shift scalar to the right by 1   
             scalar[0] = __shiftright128(scalar[0], scalar[1], 1);
@@ -572,7 +572,7 @@ pub fn ecc_mul_fixed(k: &[u64], q: &mut PointAffine) {
             scalar[2] = __shiftright128(scalar[2], scalar[3], 1);
             scalar[3] >>= 1;
 
-            let temp = (0 - digits[i - (i / 50) * 50]) & digits[i];
+            let temp = (0u64.wrapping_sub(digits[i - (i / 50) * 50])) & digits[i];
 
             scalar[0] += temp;
             let mut carry = if scalar[0] != 0 { 0 } else { temp & 1};
