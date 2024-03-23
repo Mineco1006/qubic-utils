@@ -207,8 +207,6 @@ impl Transport for Tcp {
             header = Header::from_bytes(&header_buffer)?;
         }
 
-        dbg!(header);
-
         let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
         stream.read_exact(&mut data_buffer)?;
