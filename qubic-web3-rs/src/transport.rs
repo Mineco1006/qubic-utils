@@ -287,14 +287,15 @@ impl Transport for ConnectedTcp {
     }
 
     fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
-        match self.stream.borrow_mut().write_all(&data.to_bytes()) {
+        let mut self_stream = self.stream.borrow_mut();
+        match self_stream.write_all(&data.to_bytes()) {
 
             // auto reconnection
             Err(e) => {
                 let stream = TcpStream::connect(self.get_url())?;
                 stream.set_read_timeout(Some(self.timeout))?;
                 stream.set_write_timeout(Some(self.timeout))?;
-                *self.stream.borrow_mut() = stream;
+                *self_stream = stream;
 
                 return Err(e.into())
             },

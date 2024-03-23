@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Duration};
+use std::{hash::Hash, marker::PhantomData, ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Duration};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 use std::{thread::JoinHandle, io::{Write, Read}};
@@ -8,7 +8,7 @@ use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAss
 use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
-use qubic_types::{QubicWallet, QubicId, traits::{ToBytes, FromBytes}, Signature, QubicTxHash};
+use qubic_types::{traits::{FromBytes, Sign, ToBytes}, QubicId, QubicTxHash, QubicWallet, Signature};
 use rand::Rng;
 
 #[cfg(any(feature = "async", feature = "http"))]
@@ -110,20 +110,20 @@ pub const NUMBER_OF_EXCHANGES_PEERS: usize = 4;
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 impl<'a, T> Qu<'a, T> where T: Transport {
-    pub fn send_raw_transaction(&self, wallet: &QubicWallet, raw_transaction: RawTransaction) -> Result<QubicTxHash> {
-        
-        let transaction = Transaction {
-            raw_transaction,
-            signature: wallet.sign(raw_transaction)
-        };
+    pub fn send_raw_transaction<Tx: Into<TransactionWithData>>(&self, wallet: &QubicWallet, raw_transaction: Tx) -> Result<QubicTxHash> {
+        let mut txwd: TransactionWithData = raw_transaction.into();
+        txwd.sign(wallet)?;
+        let hash = txwd.clone().into();
 
-        self.transport.send_without_response(Packet::new(transaction, false))?;
-        Ok(transaction.into())
+        self.transport.send_without_response(Packet::new(txwd, false))?;
+        Ok(hash)
     }
 
-    pub fn send_signed_transaction(&self, transaction: Transaction) -> Result<QubicTxHash> {
-        self.transport.send_without_response(Packet::new(transaction, false))?;
-        Ok(transaction.into())
+    pub fn send_signed_transaction<Tx: Into<TransactionWithData>>(&self, transaction: Tx) -> Result<QubicTxHash> {
+        let txwd: TransactionWithData = transaction.into();
+        let hash: QubicTxHash = txwd.clone().into();
+        self.transport.send_without_response(Packet::new(txwd, false))?;
+        Ok(hash)
     }
 
     pub fn submit_work(&self, solution: WorkSolution) -> Result<()> {

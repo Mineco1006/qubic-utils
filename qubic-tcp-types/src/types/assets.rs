@@ -8,6 +8,8 @@ use serde::{de::Visitor, Serialize, Deserialize};
 
 use crate::MessageType;
 
+use super::transactions::TransactionData;
+
 pub const QXID: QubicId = QubicId([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 pub const TRANSFER_FEE: u64 = 1_000_000;
 pub const ISSUE_ASSET_FEE: u64 = 1_000_000_000;
@@ -197,6 +199,19 @@ pub struct FeesOutput {
     pub trade_fee: u32
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(C)]
+pub struct TransferAssetInput {
+    pub destination: QubicId
+}
+
+impl From<TransferAssetInput> for TransactionData {
+    fn from(value: TransferAssetInput) -> Self {
+        Self::TransferAsset(value)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
@@ -205,6 +220,12 @@ pub struct IssueAssetInput {
     pub number_of_units: i64,
     pub unit_of_measurement: u64,
     pub number_of_decimal_places: i8
+}
+
+impl From<IssueAssetInput> for TransactionData {
+    fn from(value: IssueAssetInput) -> Self {
+        Self::IssueAsset(value)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -1,12 +1,12 @@
-use core::{num::NonZeroUsize, ptr::read_unaligned, fmt::Debug};
+use core::{default, fmt::Debug, num::NonZeroUsize, ptr::read_unaligned, str::FromStr};
 
 use alloc::vec::Vec;
 use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
-use qubic_types::{QubicId, Signature, QubicTxHash, traits::{ToBytes, FromBytes, GetSigner}, Nonce};
+use qubic_types::{traits::{FromBytes, GetSigner, Sign, ToBytes}, Nonce, QubicId, QubicTxHash, QubicWallet, Signature};
 
-use crate::{MessageType, consts::NUMBER_OF_TRANSACTION_PER_TICK, utils::QubicRequest};
+use crate::{consts::{ARBITRATOR, NUMBER_OF_TRANSACTION_PER_TICK}, utils::QubicRequest, MessageType};
 
-use super::{assets::IssueAssetInput, ContractIpoBid};
+use super::{assets::{IssueAssetInput, TransferAssetInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, ContractIpoBid};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -44,13 +44,6 @@ impl<T: Copy> GetSigner for Call<T> {
     fn get_signer(&self) -> &QubicId {
         &self.raw_call.tx.from
     }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(C)]
-pub struct TransferAssetInput {
-    pub destination: QubicId
 }
 
 
@@ -130,7 +123,7 @@ impl<T: Copy> From<Call<T>> for QubicTxHash {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionData {
     TransferAsset(TransferAssetInput),
@@ -138,6 +131,7 @@ pub enum TransactionData {
     IpoBid(ContractIpoBid),
     SubmitWork(Nonce),
     Unknown(Vec<u8>),
+    #[default]
     None,
 }
 
@@ -154,13 +148,56 @@ impl ToBytes for TransactionData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+impl TransactionData {
+    pub fn sanitize_transaction(&self, tx: &mut RawTransaction) {
+        match self {
+            Self::IpoBid(_) => {
+                tx.input_type = 0;
+                tx.input_size = core::mem::size_of::<ContractIpoBid>() as u16;
+            },
+            Self::IssueAsset(_) => {
+                tx.input_type = 1;
+                tx.input_size = core::mem::size_of::<IssueAssetInput>() as u16;
+                tx.to = QXID;
+                tx.amount = ISSUE_ASSET_FEE;
+            },
+            Self::SubmitWork(_) => {
+                tx.to = ARBITRATOR;
+                tx.amount = 0;
+                tx.input_type = 0;
+                tx.input_size = core::mem::size_of::<Nonce>() as u16;
+            },
+            Self::TransferAsset(_) => {
+                tx.input_type = 2;
+                tx.amount = TRANSFER_FEE;
+                tx.to = QXID;
+                tx.input_size = core::mem::size_of::<TransferAssetInput>() as u16;
+            },
+            Self::Unknown(data) => {
+                tx.input_size = data.len() as u16;
+            },
+            Self::None => ()
+        }
+    }
+}
+
+/// ### Heap allocated Transaction with custom serializer/deserializer for the data field
+/// ```
+/// use qubic_types::QubicWallet;
+/// 
+/// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+/// let mut tx = TransactionWithData::default();
+/// tx.sign(&wallet);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransactionWithData {
     pub raw_transaction: RawTransaction,
     pub data: TransactionData,
     pub signature: Signature
 }
+
+set_message_type!(TransactionWithData, MessageType::BroadcastTransaction);
 
 impl ToBytes for TransactionWithData {
     fn to_bytes(&self) -> Vec<u8> {
@@ -254,5 +291,108 @@ impl From<TransactionWithData> for QubicTxHash {
         kg.into_xof().squeeze(&mut hash);
 
         QubicTxHash(hash)
+    }
+}
+
+impl From<Transaction> for TransactionWithData {
+    fn from(value: Transaction) -> Self {
+        Self {
+            raw_transaction: value.raw_transaction,
+            data: TransactionData::None,
+            signature: value.signature
+        }
+    }
+}
+
+impl<T> From<Call<T>> for TransactionWithData
+    where T: Copy + Into<TransactionData>
+{
+    fn from(value: Call<T>) -> Self {
+        Self {
+            raw_transaction: value.raw_call.tx,
+            data: value.raw_call.input.into(),
+            signature: value.signature
+        }
+    }
+}
+
+impl From<RawTransaction> for TransactionWithData {
+    fn from(value: RawTransaction) -> Self {
+        Self {
+            raw_transaction: value,
+            data: TransactionData::None,
+            signature: Signature::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TransactionBuilder<'a> {
+    raw_tx: RawTransaction,
+    data: TransactionData,
+    signer: Option<&'a QubicWallet>
+}
+
+impl<'a> TransactionBuilder<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_from_id(mut self, from: QubicId) -> Self {
+        self.raw_tx.from = from;
+        self
+    }
+
+    pub fn with_to_id(mut self, to: QubicId) -> Self {
+        self.raw_tx.to = to;
+        self
+    }
+
+    pub fn with_amount(mut self, amount: u64) -> Self {
+        self.raw_tx.amount = amount;
+        self
+    }
+
+    pub fn with_tx_data(mut self, data: TransactionData) -> Self {
+        self.data = data;
+        self
+    }
+
+    pub fn with_input_type_and_size(mut self, input_type: u16, input_size: u16) -> Self {
+        self.raw_tx.input_type = input_type;
+        self.raw_tx.input_size = input_size;
+
+        self
+    }
+
+    pub fn with_signing_wallet(mut self, wallet: &'a QubicWallet) -> Self {
+        self.signer = Some(wallet);
+        self
+    }
+
+    pub fn build(mut self) -> TransactionWithData {
+        if let Some(signer) = self.signer {
+            self.data.sanitize_transaction(&mut self.raw_tx);
+
+            self.raw_tx.from = signer.public_key;
+
+            let mut tx = TransactionWithData {
+                raw_transaction: self.raw_tx,
+                data: self.data,
+                signature: Signature::default()
+            };
+
+            tx.sign(signer).unwrap();
+
+            tx
+        } else {
+            self.data.sanitize_transaction(&mut self.raw_tx);
+
+            TransactionWithData {
+                raw_transaction: self.raw_tx,
+                data: self.data,
+                signature: Signature::default()
+            }
+        }
     }
 }
