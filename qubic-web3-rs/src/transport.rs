@@ -290,7 +290,8 @@ impl Transport for ConnectedTcp {
 
             // auto reconnection
             Err(e) => {
-                let stream = TcpStream::connect(self.get_url())?;
+                let addr = self_stream.peer_addr().unwrap();
+                let stream = TcpStream::connect(addr)?;
                 stream.set_read_timeout(Some(self.timeout))?;
                 stream.set_write_timeout(Some(self.timeout))?;
                 *self_stream = stream;
