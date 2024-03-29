@@ -263,6 +263,7 @@ impl Transport for Tcp {
 
 pub struct ConnectedTcp {
     pub stream: RefCell<TcpStream>,
+    pub url: String,
     timeout: Duration
 }
 
@@ -279,6 +280,7 @@ impl Transport for ConnectedTcp {
         Ok(
             Box::new(Self {
                 stream: RefCell::new(stream),
+                url,
                 timeout
             })
         )
@@ -290,7 +292,7 @@ impl Transport for ConnectedTcp {
 
             // auto reconnection
             Err(e) => {
-                let addr = self_stream.peer_addr().unwrap();
+                let addr = self.get_url();
                 let stream = TcpStream::connect(addr)?;
                 stream.set_read_timeout(Some(self.timeout))?;
                 stream.set_write_timeout(Some(self.timeout))?;
@@ -397,7 +399,7 @@ impl Transport for ConnectedTcp {
     }
 
     fn get_url(&self) -> String {
-        self.stream.borrow().peer_addr().unwrap().to_string()
+        self.url.clone()
     }
 
     fn connect(&self) -> Result<TcpStream> {

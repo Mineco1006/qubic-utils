@@ -211,7 +211,7 @@ pub fn fp2div1271(a: &mut F2elmT) {
     let mut mask: u64;
     let mut temp = [0u64; 2];
 
-    mask = 0u64.wrapping_sub((1 & a[0][0]));
+    mask = 0u64.wrapping_sub(1 & a[0][0]);
     addcarry_u64(addcarry_u64(0, a[0][0], mask, &mut temp[0]), a[0][1], mask >> 1, &mut temp[1]);
     a[0][0] = __shiftright128(temp[0], temp[1], 1);
     a[0][1] = temp[1] >> 1;
