@@ -1,8 +1,7 @@
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::{_subborrow_u64, _addcarry_u64};
 
-use alloc::{format, string::String};
-use alloc::vec::Vec;
+use alloc::format;
 
 use core::{ptr::copy_nonoverlapping, fmt::{Debug, Display}, str::FromStr};
 
@@ -183,6 +182,10 @@ impl QubicId {
         }
 
         core::array::from_fn(|i| u64::from_be_bytes(ret[i]))
+    }
+
+    pub fn from_contract_id(contract_id: u32) -> QubicId {
+        QubicId::from_le_u64([contract_id as u64, 0, 0, 0])
     }
 
     /// Verifies signature from message

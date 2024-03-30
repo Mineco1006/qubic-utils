@@ -6,7 +6,7 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "91.208.92.59:21841";
+const COMPUTOR: &str = "62.113.194.75:21841";
 const TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -81,6 +81,8 @@ fn test_check() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_subscription() {
+    use qubic_tcp_types::types::transactions::TransactionData;
+
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let (tx, rx) = crossbeam_channel::unbounded::<NetworkEvent>();
@@ -107,7 +109,12 @@ fn test_subscription() {
                 },
                 NetworkEvent::BroadcastTransaction(tx) => {
                     if tx.verify() {
-                        transactions += 1;
+                        match tx.data {
+                            TransactionData::SubmitWork(_) => solutions += 1,
+                            _ => {
+                                transactions += 1
+                            }
+                        }
                     }
                 },
                 NetworkEvent::BroadcastTick(t) => {
@@ -150,7 +157,6 @@ fn test_asset() {
 
     dbg!(client.qx().request_issued_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());
 }
-
 
 #[cfg(any(feature = "async", feature = "http"))]
 #[tokio::test]

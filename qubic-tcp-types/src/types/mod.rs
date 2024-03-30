@@ -7,10 +7,10 @@ pub mod token;
 pub mod assets;
 pub mod special_commands;
 pub mod qlogging;
+pub mod send_to_many;
+pub mod contracts;
 
 use core::net::Ipv4Addr;
-
-use alloc::vec::Vec;
 use qubic_types::{QubicId, Signature, Nonce, traits::ToBytes};
 use time::QubicTime;
 
@@ -156,10 +156,11 @@ pub struct Packet<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: Sized + QubicRequest> Packet<T> {
+impl<T: ToBytes + QubicRequest> Packet<T> {
     pub fn new(data: T, randomize_dejavu: bool) -> Packet<T> {
+        let data_size = data.to_bytes().len();
         Self {
-            header: Header::new(core::mem::size_of::<Header>() + core::mem::size_of_val(&data), T::get_message_type(), randomize_dejavu),
+            header: Header::new(core::mem::size_of::<Header>() + data_size, T::get_message_type(), randomize_dejavu),
             data
         }
     }

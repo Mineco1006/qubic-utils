@@ -4,7 +4,7 @@ use std::{hash::Hash, marker::PhantomData, ptr::{copy_nonoverlapping, read_unali
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, qlogging::{QubicLog, RequestLog}, ticks::{CurrentTickInfo, GetCurrentTickInfo}, transactions::{RawTransaction, Transaction}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity, SystemInfo}, Header, MessageType};
+use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, contracts::RequestContractFunction, qlogging::{QubicLog, RequestLog}, send_to_many::{SendToManyFeeOutput, SendToManyInput, SendToManyTransaction, SEND_TO_MANY_CONTRACT_INDEX}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity, SystemInfo}, Header, MessageType};
 use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
@@ -340,6 +340,41 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let packet = Packet::new(RequestLog { passcode }, true);
 
         Ok(self.transport.send_with_response(packet)?)
+    }
+
+    pub fn get_send_to_many_fees(&self) -> Result<SendToManyFeeOutput> {
+        let packet = Packet::new(RequestContractFunction {
+            contract_index: SEND_TO_MANY_CONTRACT_INDEX,
+            input_type: 1,
+            input_size: 0
+        }, true);
+
+        Ok(self.transport.send_with_response(packet)?)
+    }
+
+    /// panics if txns.len() > 25
+    pub fn send_to_many(&self, wallet: &QubicWallet, txns: &Vec<SendToManyTransaction>, tick: u32) -> Result<QubicTxHash> {
+        let mut input = SendToManyInput::default();
+        for (idx, tx) in txns.into_iter().enumerate() {
+            input.ids[idx] = tx.id;
+            input.amounts[idx] = tx.amount;
+        }
+
+        let fee = self.get_send_to_many_fees()?;
+
+        let tx = TransactionBuilder::new()
+                                        .with_amount(fee.fee as u64)
+                                        .with_signing_wallet(wallet)
+                                        .with_tick(tick)
+                                        .with_tx_data(TransactionData::SendToMany(input))
+                                        .build();
+        
+        let hash = QubicTxHash::from(tx.clone());
+
+        let packet = Packet::new(tx, false);
+
+        self.transport.send_without_response(packet)?;
+        Ok(hash)
     }
 }
 

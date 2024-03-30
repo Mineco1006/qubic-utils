@@ -1,7 +1,3 @@
-use core::str::FromStr;
-
-use alloc::string::String;
-use alloc::vec::Vec;
 use qubic_types::traits::{FromBytes, ToBytes};
 use qubic_types::Signature;
 use crate::consts::NUMBER_OF_COMPUTORS;
@@ -181,7 +177,7 @@ impl Ballot {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-struct GetProposalAndBallotRequest {
+pub struct GetProposalAndBallotRequest {
     pub computor_index: u16,
     pub padding: [u8; 6],
     pub signature: Signature
@@ -191,7 +187,7 @@ set_command_type!(GetProposalAndBallotRequest, CommandType::SpecialCommandGetPro
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-struct GetProposalAndBallotResponse {
+pub struct GetProposalAndBallotResponse {
     pub computor_index: u16,
     pub padding: [u8; 6],
     pub proposal: Proposal,
@@ -202,7 +198,7 @@ set_command_type!(GetProposalAndBallotResponse, CommandType::SpecialCommandGetPr
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-struct SetProposalAndBallotRequest {
+pub struct SetProposalAndBallotRequest {
     pub computor_index: u16,
     pub padding: [u8; 6],
     pub proposal: Proposal,
@@ -214,7 +210,7 @@ set_command_type!(SetProposalAndBallotRequest, CommandType::SpecialCommandSetPro
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
-struct SetProposalAndBallotResponse {
+pub struct SetProposalAndBallotResponse {
     pub computor_index: u16,
     pub padding: [u8; 6],
 }

@@ -3,8 +3,6 @@ use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
 use crate::errors::QubicError;
 use crate::{QubicWallet, Signature};
 
-use alloc::vec::Vec;
-
 use crate::{errors::ByteEncodingError, QubicId};
 
 pub trait ToBytes {
@@ -70,7 +68,7 @@ impl<T> Sign for T
         kg.update(&bytes[..bytes.len() - core::mem::size_of::<Signature>()]);
         kg.into_xof().squeeze(&mut digest);
 
-        let sig = wallet.sign(digest);
+        let sig = wallet.sign_raw(digest);
 
         let len = bytes.len();
         bytes[len - core::mem::size_of::<Signature>()..len].copy_from_slice(&sig.to_bytes());

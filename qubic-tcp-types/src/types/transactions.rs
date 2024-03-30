@@ -1,12 +1,10 @@
-use core::{default, fmt::Debug, num::NonZeroUsize, ptr::read_unaligned, str::FromStr};
-
-use alloc::vec::Vec;
+use core::{fmt::Debug, num::NonZeroUsize, ptr::read_unaligned};
 use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
 use qubic_types::{traits::{FromBytes, GetSigner, Sign, ToBytes}, Nonce, QubicId, QubicTxHash, QubicWallet, Signature};
 
 use crate::{consts::{ARBITRATOR, NUMBER_OF_TRANSACTION_PER_TICK}, utils::QubicRequest, MessageType};
 
-use super::{assets::{IssueAssetInput, TransferAssetInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, ContractIpoBid};
+use super::{assets::{IssueAssetInput, TransferAssetInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, send_to_many::{SendToManyInput, SEND_TO_MANY_CONTRACT_INDEX}, ContractIpoBid};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -130,7 +128,9 @@ pub enum TransactionData {
     IssueAsset(IssueAssetInput),
     IpoBid(ContractIpoBid),
     SubmitWork(Nonce),
+    SendToMany(SendToManyInput),
     Unknown(Vec<u8>),
+
     #[default]
     None,
 }
@@ -142,6 +142,7 @@ impl ToBytes for TransactionData {
             TransactionData::IssueAsset(d) => d.to_bytes(),
             TransactionData::IpoBid(d) => d.to_bytes(),
             TransactionData::SubmitWork(d) => d.to_bytes(),
+            TransactionData::SendToMany(d) => d.to_bytes(),
             TransactionData::Unknown(d) => d.clone(),
             TransactionData::None => vec![]
         }
@@ -172,6 +173,12 @@ impl TransactionData {
                 tx.amount = TRANSFER_FEE;
                 tx.to = QXID;
                 tx.input_size = core::mem::size_of::<TransferAssetInput>() as u16;
+            },
+            Self::SendToMany(SendToManyInput { ids: _, amounts }) => {
+                tx.input_type = 1;
+                tx.input_size = core::mem::size_of::<SendToManyInput>() as u16;
+                tx.to = QubicId::from_contract_id(SEND_TO_MANY_CONTRACT_INDEX);
+                tx.amount += amounts.iter().sum::<u64>();
             },
             Self::Unknown(data) => {
                 tx.input_size = data.len() as u16;
@@ -239,6 +246,8 @@ impl FromBytes for TransactionWithData {
                     };
 
                     data = TransactionData::IpoBid(bid);
+                } else if raw_tx.input_size == 0 {
+                    data = TransactionData::None;
                 } else {
                     data = TransactionData::Unknown(tx_data);
                 }
@@ -250,6 +259,12 @@ impl FromBytes for TransactionWithData {
                     };
 
                     data = TransactionData::IssueAsset(input);
+                } else if raw_tx.input_size as usize == core::mem::size_of::<SendToManyInput>() {
+                    let input = unsafe {
+                        read_unaligned(tx_data.as_ptr() as *const SendToManyInput)
+                    };
+
+                    data = TransactionData::SendToMany(input);
                 } else {
                     data = TransactionData::Unknown(tx_data);
                 }
@@ -266,7 +281,11 @@ impl FromBytes for TransactionWithData {
                 }
             }
             _ => {
-                data = TransactionData::Unknown(tx_data);
+                if raw_tx.input_size == 0 {
+                    data = TransactionData::None;
+                } else {
+                    data = TransactionData::Unknown(tx_data);
+                }
             }
         }
 
@@ -355,6 +374,11 @@ impl<'a> TransactionBuilder<'a> {
 
     pub fn with_tx_data(mut self, data: TransactionData) -> Self {
         self.data = data;
+        self
+    }
+
+    pub fn with_tick(mut self, tick: u32) -> Self {
+        self.raw_tx.tick = tick;
         self
     }
 

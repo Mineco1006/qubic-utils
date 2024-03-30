@@ -1,5 +1,4 @@
 use qubic_types::{QubicId, H256};
-use alloc::vec::Vec;
 
 macro_rules! impl_tokenize {
     ($impl: ty, $var: ident) => {

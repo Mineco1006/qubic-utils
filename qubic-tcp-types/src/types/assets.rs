@@ -1,6 +1,4 @@
 use core::{fmt::Debug, str::FromStr};
-
-use alloc::string::{String, ToString};
 use qubic_types::QubicId;
 
 #[cfg(feature = "serde")]
