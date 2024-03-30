@@ -353,7 +353,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     }
 
     /// panics if txns.len() > 25
-    pub fn send_to_many(&self, wallet: &QubicWallet, txns: &Vec<SendToManyTransaction>, tick: u32) -> Result<QubicTxHash> {
+    pub fn send_to_many(&self, wallet: &QubicWallet, txns: &[SendToManyTransaction], tick: u32) -> Result<QubicTxHash> {
         let mut input = SendToManyInput::default();
         for (idx, tx) in txns.into_iter().enumerate() {
             input.ids[idx] = tx.id;
