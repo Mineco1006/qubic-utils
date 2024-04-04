@@ -20,7 +20,7 @@ pub trait Transport {
 
     fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err>;
 
-    fn send_without_response(&self, data: impl ToBytes) -> Result<()>;
+    fn send_without_response<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<()>;
 
     fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T>;
 
@@ -172,12 +172,11 @@ impl Transport for Tcp {
         }))
     }
 
-    fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
+    fn send_without_response<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<()> {
         let mut stream = TcpStream::connect(&self.url)?;
         stream.set_write_timeout(Some(self.timeout))?;
 
         stream.write_all(&data.to_bytes())?;
-
         Ok(())
     }
 
@@ -286,7 +285,7 @@ impl Transport for ConnectedTcp {
         )
     }
 
-    fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
+    fn send_without_response<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<()> {
         let mut self_stream = self.stream.borrow_mut();
         match self_stream.write_all(&data.to_bytes()) {
 
