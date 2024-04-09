@@ -197,6 +197,7 @@ pub struct SystemInfo {
     pub number_of_transactions: u32,
 
     pub random_mining_seed: [u8; 32],
+    pub solution_threshold: u32
 }
 
 set_message_type!(SystemInfo, MessageType::RespondSystemInfo);
