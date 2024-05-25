@@ -6,10 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "*", features = ["derive"] }
-qubic-types = { path = "../qubic-types", features = ["serde"]}
-qubic-tcp-types = { path = "../qubic-tcp-types", features = ["serde"]}
+serde = { version = "*", features = ["derive"]}
+qubic-types = { path = "../qubic-types", default-features = false, features = ["serde"]}
+qubic-tcp-types = { path = "../qubic-tcp-types", default-features = false, features = ["serde"]}
 hex = "*"
 
 [dev-dependencies]
 serde_json = "*"
+
+[features]
+default = ["serde", "qubic-types/std"]
+serde = ["qubic-types/serde", "qubic-tcp-types/serde"]
+wasm = ["qubic-tcp-types/wasm"]

@@ -64,9 +64,9 @@ pub struct Header {
     pub dejavu: u32,
 }
 
-#[cfg(not(feature = "wasm"))]
-impl Header {
 
+impl Header {
+    #[cfg(not(feature = "wasm"))]
     pub fn new(size: usize, message_type: MessageType, randomize_dejavu: bool) -> Self {
         
         let mut new = Self { size: [0; 3], message_type, dejavu: 0};
@@ -74,6 +74,15 @@ impl Header {
         if randomize_dejavu {
             new.randomize_dejavu();
         }
+
+        new
+    }
+
+    pub fn new_with_dejavu(size: usize, message_type: MessageType, dejavu: u32) -> Self {
+        
+        let mut new = Self { size: [0; 3], message_type, dejavu: 0};
+        new.set_size(size);
+        new.dejavu = dejavu;
 
         new
     }

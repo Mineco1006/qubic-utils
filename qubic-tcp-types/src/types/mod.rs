@@ -155,10 +155,11 @@ pub struct Packet<T> {
     pub data: T
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "wasm")))]
 impl<T: ToBytes + QubicRequest> Packet<T> {
     pub fn new(data: T, randomize_dejavu: bool) -> Packet<T> {
         let data_size = data.to_bytes().len();
+
         Self {
             header: Header::new(core::mem::size_of::<Header>() + data_size, T::get_message_type(), randomize_dejavu),
             data

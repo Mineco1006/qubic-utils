@@ -6,8 +6,8 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "62.113.194.75:21841";
-const TESTNET: &str = "57.129.19.155:31841";
+const COMPUTOR: &str = "194.45.36.144:21841";
+const _TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
@@ -156,6 +156,25 @@ fn test_asset() {
     dbg!(client.qx().request_issued_assets(QubicId::default()).unwrap());
 
     dbg!(client.qx().request_issued_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).unwrap());
+}
+
+#[cfg(not(any(feature = "async", feature = "http")))]
+#[test]
+fn test_tick() {
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
+
+    let tick = 13237172;
+    let id = QubicId::from_str("DTWINQHFOSIBVDHKQWCYLAMNSCJDWARQRNAYCHDRIBBFYTSVUWHREYEEUBXF").unwrap();
+
+    let txns = client.qu().request_tick_transactions(tick, TransactionFlags::all()).unwrap();
+
+    dbg!(txns.len());
+    for tx in txns {
+        if tx.raw_transaction.to == id {
+            dbg!(tx);
+        }
+    }
+    
 }
 
 #[cfg(any(feature = "async", feature = "http"))]
