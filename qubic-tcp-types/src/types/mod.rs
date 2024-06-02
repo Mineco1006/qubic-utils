@@ -151,7 +151,7 @@ set_message_type!(ExchangePublicPeers, MessageType::ExchangePublicPeers);
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct Packet<T> {
-    header: Header,
+    pub header: Header,
     pub data: T
 }
 
