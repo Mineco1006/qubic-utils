@@ -136,7 +136,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
                 copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
-                let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().flatten(), &[]);
+                let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().into_iter().flatten().collect::<Vec<_>>(), &[]);
                 let mut gk = [0; 32];
                 kg.squeeze(&mut gk);
                 gamming_key = std::array::from_fn(|i| u64::from_le_bytes(gk[i*8..i*8 + 8].try_into().unwrap()));
