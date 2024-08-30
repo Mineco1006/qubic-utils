@@ -33,47 +33,6 @@ pub struct RequestTickData {
 
 set_message_type!(RequestTickData, MessageType::RequestTickData);
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub struct VarStructBuffer([u8; 256]);
-
-#[derive(Debug, Clone, Copy)]
-pub enum BallotOrProposal {
-    Ballot(Ballot),
-    Proposal(Proposal)
-}
-
-impl From<&VarStructBuffer> for BallotOrProposal {
-    fn from(value: &VarStructBuffer) -> BallotOrProposal {
-        match value.0[0] {
-            0 => {
-                let ballot = Ballot {
-                    zero: 0,
-                    votes: value.0[1..255].try_into().unwrap(),
-                    quasi_random_number: value.0[255]
-                };
-
-                BallotOrProposal::Ballot(ballot)
-            },
-            _ => {
-                let proposal = Proposal {
-                    uri_size: value.0[0],
-                    uri: value.0[1..].try_into().unwrap()
-                };
-
-                BallotOrProposal::Proposal(proposal)
-            }
-        }
-    }
-}
-
-impl Debug for VarStructBuffer {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let bop: BallotOrProposal = self.into();
-        write!(f, "{bop:?}")
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct TickData {
@@ -83,19 +42,11 @@ pub struct TickData {
 
     pub time: QubicTime,
 
-    var_struct: VarStructBuffer,
-
     pub time_lock: [u8; 32],
     pub transaction_digest: [QubicTxHash; NUMBER_OF_TRANSACTION_PER_TICK],
     pub contract_fees: [u64; MAX_NUMBER_OF_CONTRACTS],
 
     pub signature: Signature
-}
-
-impl TickData {
-    pub fn get_var_struct(&self) -> BallotOrProposal {
-        (&self.var_struct).into()
-    }
 }
 
 set_message_type!(TickData, MessageType::BroadcastFutureTickData);
