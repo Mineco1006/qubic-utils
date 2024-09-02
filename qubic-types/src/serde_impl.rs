@@ -3,7 +3,7 @@ use alloc::format;
 
 use serde::{Serialize, Deserialize, de::Visitor};
 
-use crate::{QubicId, Signature, Nonce, QubicTxHash};
+use crate::{QubicId, Signature, MiningSeed, Nonce, QubicTxHash};
 
 
 struct QubicIdVisitor;
@@ -144,6 +144,18 @@ impl Serialize for Signature {
 impl<'de> Deserialize<'de> for Signature {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
         Ok(Signature(deserializer.deserialize_str(HexVisitor)?))
+    }
+}
+
+impl Serialize for MiningSeed {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+        serializer.collect_str(&format!("0x{}", hex::encode(self.0)))
+    }
+}
+
+impl<'de> Deserialize<'de> for MiningSeed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+        Ok(MiningSeed(deserializer.deserialize_str(HexVisitor)?))
     }
 }
 

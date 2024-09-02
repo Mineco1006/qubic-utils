@@ -1,6 +1,6 @@
 use core::{fmt::Debug, num::NonZeroUsize, ptr::read_unaligned};
 use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
-use qubic_types::{traits::{FromBytes, GetSigner, Sign, ToBytes}, Nonce, QubicId, QubicTxHash, QubicWallet, Signature};
+use qubic_types::{traits::{FromBytes, GetSigner, Sign, ToBytes}, MiningSeed, Nonce, QubicId, QubicTxHash, QubicWallet, Signature};
 
 use crate::{consts::{ARBITRATOR, NUMBER_OF_TRANSACTION_PER_TICK}, utils::QubicRequest, MessageType};
 
@@ -127,7 +127,7 @@ pub enum TransactionData {
     TransferAsset(TransferAssetInput),
     IssueAsset(IssueAssetInput),
     IpoBid(ContractIpoBid),
-    SubmitWork(Nonce),
+    SubmitWork(MiningSeed, Nonce),
     SendToMany(SendToManyInput),
     Unknown(Vec<u8>),
 
@@ -141,7 +141,7 @@ impl ToBytes for TransactionData {
             TransactionData::TransferAsset(d) => d.to_bytes(),
             TransactionData::IssueAsset(d) => d.to_bytes(),
             TransactionData::IpoBid(d) => d.to_bytes(),
-            TransactionData::SubmitWork(d) => d.to_bytes(),
+            TransactionData::SubmitWork(m, n) => [m.to_bytes(), n.to_bytes()].concat(),
             TransactionData::SendToMany(d) => d.to_bytes(),
             TransactionData::Unknown(d) => d.clone(),
             TransactionData::None => vec![]
@@ -162,11 +162,11 @@ impl TransactionData {
                 tx.to = QXID;
                 tx.amount = ISSUE_ASSET_FEE;
             },
-            Self::SubmitWork(_) => {
+            Self::SubmitWork(..) => {
                 tx.to = ARBITRATOR;
                 tx.amount = 0;
                 tx.input_type = 0;
-                tx.input_size = core::mem::size_of::<Nonce>() as u16;
+                tx.input_size = (core::mem::size_of::<MiningSeed>() as u16) + (core::mem::size_of::<Nonce>() as u16);
             },
             Self::TransferAsset(_) => {
                 tx.input_type = 2;
@@ -238,8 +238,13 @@ impl FromBytes for TransactionWithData {
 
         match raw_tx.input_type {
             0 => {
-                if raw_tx.input_size as usize == core::mem::size_of::<Nonce>() && tx_data.len() == core::mem::size_of::<Nonce>() && raw_tx.amount == 0 {
-                    data = TransactionData::SubmitWork(Nonce(tx_data.try_into().unwrap()));
+                if raw_tx.input_size as usize == (core::mem::size_of::<MiningSeed>() + core::mem::size_of::<Nonce>())
+                && tx_data.len() == (core::mem::size_of::<MiningSeed>() + core::mem::size_of::<Nonce>())
+                && raw_tx.amount == 0 {
+                    data = TransactionData::SubmitWork(
+                        MiningSeed(tx_data[..core::mem::size_of::<MiningSeed>()].try_into().unwrap()),
+                        Nonce(tx_data[core::mem::size_of::<MiningSeed>()..].try_into().unwrap())
+                    );
                 } else if raw_tx.input_size == 16 {
                     let bid = unsafe {
                         read_unaligned(tx_data.as_ptr() as *const ContractIpoBid)
