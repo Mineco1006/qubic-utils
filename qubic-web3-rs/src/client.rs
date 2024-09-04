@@ -153,7 +153,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         kg.squeeze(&mut gamma);
 
         for i in 0..32 {
-            message.solution_mining_seed.0[i] = solution.random_seed.0[i] ^ gamma[i];
+            message.solution_mining_seed[i] = solution.random_seed[i] ^ gamma[i];
             message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i + 32];
         }
 
