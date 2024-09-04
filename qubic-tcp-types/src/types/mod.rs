@@ -23,6 +23,7 @@ pub struct BroadcastMessage {
     pub source_public_key: QubicId,
     pub destination_public_key: QubicId,
     pub gamming_nonce: Nonce,
+    pub random_mining_seed: [u8; 32],
     pub solution_nonce: Nonce,
     pub signature: Signature
 }
@@ -32,6 +33,7 @@ set_message_type!(BroadcastMessage, MessageType::BroadcastMessage);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorkSolution {
     pub public_key: QubicId,
+    pub random_seed: [u8; 32],
     pub nonce: Nonce,
 }
 
@@ -41,6 +43,7 @@ impl From<WorkSolution> for BroadcastMessage {
             source_public_key: QubicId::default(),
             destination_public_key: value.public_key,
             gamming_nonce: Nonce::default(),
+            random_mining_seed: value.random_seed,
             solution_nonce: Nonce::default(),
             signature: Signature::default()
         }
