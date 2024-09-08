@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::env;
 use axum::{
     routing::post,
     extract::State,
@@ -31,12 +32,18 @@ async fn main() {
 
     let args = Args::parse();
 
+    let port = env::var("PORT").unwrap_or(args.port);
+    let computor = env::var("COMPUTOR").unwrap_or(args.computor);
+
     let cors = CorsLayer::new()
                         .allow_methods([Method::POST])
                         .allow_origin(Any)
                         .allow_headers(Any);
 
-    let state = Arc::new(args);
+    let state = Arc::new(Args {
+        port: port.clone(),
+        computor: computor.clone(),
+    });
 
     let app = Router::new().route("/", post(request_handler)).with_state(state.clone()).layer(cors);
 
