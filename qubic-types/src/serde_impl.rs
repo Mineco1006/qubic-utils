@@ -46,10 +46,10 @@ impl<'de> Deserialize<'de> for QubicId {
     }
 }
 
-struct QubicTxHashVisitor;
+struct LowerCaseIdentityVisitor;
 
-impl<'de> Visitor<'de> for QubicTxHashVisitor {
-    type Value = QubicTxHash;
+impl<'de> Visitor<'de> for LowerCaseIdentityVisitor {
+    type Value = [u8; 32];
 
     fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("60 lowercase character alphabetic ASCII string")
@@ -57,7 +57,7 @@ impl<'de> Visitor<'de> for QubicTxHashVisitor {
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: serde::de::Error, {
         match QubicTxHash::from_str(value) {
-            Ok(r) => Ok(r),
+            Ok(r) => Ok(r.0),
             Err(e) => {
                 Err(E::custom(e.to_string()))
             } 
@@ -66,7 +66,7 @@ impl<'de> Visitor<'de> for QubicTxHashVisitor {
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E> where E: serde::de::Error, {
         match QubicTxHash::from_str(&value) {
-            Ok(r) => Ok(r),
+            Ok(r) => Ok(r.0),
             Err(e) => {
                 Err(E::custom(e.to_string()))
             } 
@@ -82,7 +82,7 @@ impl Serialize for QubicTxHash {
 
 impl<'de> Deserialize<'de> for QubicTxHash {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
-        deserializer.deserialize_str(QubicTxHashVisitor)
+        Ok(QubicTxHash(deserializer.deserialize_str(LowerCaseIdentityVisitor)?))
     }
 }
 
@@ -149,13 +149,13 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl Serialize for MiningSeed {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-        serializer.collect_str(&format!("0x{}", hex::encode(self.0)))
+        serializer.collect_str(&format!("{}", self.get_identity()))
     }
 }
 
 impl<'de> Deserialize<'de> for MiningSeed {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
-        Ok(MiningSeed(deserializer.deserialize_str(HexVisitor)?))
+        Ok(MiningSeed(deserializer.deserialize_str(LowerCaseIdentityVisitor)?))
     }
 }
 

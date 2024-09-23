@@ -509,17 +509,13 @@ impl Display for Signature {
 
 impl Debug for MiningSeed {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut hex_slice = [0; 64];
-        hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
-        f.write_str(&format!("0x{}", String::from_utf8(hex_slice.to_vec()).unwrap()))
+        f.write_str(&format!("{}", self.get_identity()))
     }
 }
 
 impl Display for MiningSeed {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut hex_slice = [0; 64];
-        hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
-        f.write_str(&format!("0x{}", String::from_utf8(hex_slice.to_vec()).unwrap()))
+        f.write_str(&format!("{}", self.get_identity()))
     }
 }
 
@@ -554,6 +550,63 @@ impl MiningSeed {
         }
 
         core::array::from_fn(|i| u64::from_be_bytes(ret[i]))
+    }
+
+    #[inline]
+    pub fn get_identity(&self) -> String {
+        let mut identity = [0u8; 60];
+        for i in 0..4 {
+            let mut public_key_fragment = u64::from_le_bytes(self.0[i << 3..(i << 3) + 8].try_into().unwrap());
+            for j in 0..14 {
+                identity[i * 14 + j] = (public_key_fragment % 26) as u8 + b'a';
+                public_key_fragment /= 26;
+            }
+        }
+
+        let mut identity_bytes_checksum = [0u8; 3];
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&self.0);
+        kg.into_xof().squeeze(&mut identity_bytes_checksum);
+        let mut identity_bytes_checksum = identity_bytes_checksum[0] as u64 | (identity_bytes_checksum[1] as u64) << 8 | (identity_bytes_checksum[2] as u64) << 16;
+        identity_bytes_checksum &= 0x3FFFF;
+        for i in 0..4 {
+            identity[56 + i] = (identity_bytes_checksum % 26) as u8 + b'a';
+            identity_bytes_checksum /= 26;
+        }
+
+        String::from_utf8(identity.to_vec()).unwrap()
+    }
+}
+
+impl FromStr for MiningSeed {
+    type Err = QubicError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut buffer = [0u8; 32];
+
+        if !s.chars().all(|c| c.is_lowercase() && c.is_ascii_alphabetic()) {
+            return Err(QubicError::InvalidIdFormatError { ident: "TxHash" })
+        }
+
+        let id = s.as_bytes();
+
+        if id.len() != 60 {
+            return Err(QubicError::InvalidIdLengthError { ident: "TxHash", expected: 60, found: id.len()})
+        }
+
+        for i in 0..4 {
+            for j in (0..14usize).rev() {
+                let im = u64::from_le_bytes(buffer[i << 3..(i << 3) + 8].try_into().unwrap()) * 26 + (id[i * 14 + j] - b'a') as u64;
+                let im = im.to_le_bytes();
+                
+                for k in 0..8 {
+                    buffer[(i << 3) + k] = im[k];
+                }
+            }
+        }
+        
+
+        Ok(Self(buffer))
     }
 }
 

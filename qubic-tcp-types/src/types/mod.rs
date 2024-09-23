@@ -11,7 +11,7 @@ pub mod send_to_many;
 pub mod contracts;
 
 use core::net::Ipv4Addr;
-use qubic_types::{QubicId, Signature, Nonce, traits::ToBytes};
+use qubic_types::{traits::ToBytes, MiningSeed, Nonce, QubicId, Signature};
 use time::QubicTime;
 
 use crate::{consts::SPECTRUM_DEPTH, utils::QubicRequest, Header, MessageType};
@@ -23,6 +23,7 @@ pub struct BroadcastMessage {
     pub source_public_key: QubicId,
     pub destination_public_key: QubicId,
     pub gamming_nonce: Nonce,
+    pub solution_mining_seed: MiningSeed,
     pub solution_nonce: Nonce,
     pub signature: Signature
 }
@@ -32,6 +33,7 @@ set_message_type!(BroadcastMessage, MessageType::BroadcastMessage);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorkSolution {
     pub public_key: QubicId,
+    pub random_seed: MiningSeed,
     pub nonce: Nonce,
 }
 
@@ -41,6 +43,7 @@ impl From<WorkSolution> for BroadcastMessage {
             source_public_key: QubicId::default(),
             destination_public_key: value.public_key,
             gamming_nonce: Nonce::default(),
+            solution_mining_seed: MiningSeed::default(),
             solution_nonce: Nonce::default(),
             signature: Signature::default()
         }
