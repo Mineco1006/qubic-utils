@@ -4,7 +4,7 @@ use qubic_types::{Signature, H256, QubicTxHash};
 
 use crate::{MessageType, consts::{NUMBER_OF_TRANSACTION_PER_TICK, NUMBER_OF_COMPUTORS, MAX_NUMBER_OF_CONTRACTS}};
 
-use super::{time::QubicTime, special_commands::{Ballot, Proposal}};
+use super::time::QubicTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]

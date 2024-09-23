@@ -1,8 +1,8 @@
 use core::{fmt::Debug, num::NonZeroUsize, ptr::read_unaligned};
 use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
-use qubic_types::{traits::{FromBytes, GetSigner, Sign, ToBytes}, Nonce, QubicId, QubicTxHash, QubicWallet, Signature};
+use qubic_types::{traits::{FromBytes, GetSigner, Sign, ToBytes}, MiningSeed, Nonce, QubicId, QubicTxHash, QubicWallet, Signature};
 
-use crate::{consts::{ARBITRATOR, NUMBER_OF_TRANSACTION_PER_TICK}, utils::QubicRequest, MessageType};
+use crate::{consts::NUMBER_OF_TRANSACTION_PER_TICK, utils::QubicRequest, MessageType};
 
 use super::{assets::{IssueAssetInput, TransferAssetInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, send_to_many::{SendToManyInput, SEND_TO_MANY_CONTRACT_INDEX}, ContractIpoBid};
 
@@ -127,7 +127,7 @@ pub enum TransactionData {
     TransferAsset(TransferAssetInput),
     IssueAsset(IssueAssetInput),
     IpoBid(ContractIpoBid),
-    SubmitWork(Nonce),
+    SubmitWork { seed: MiningSeed, nonce: Nonce },
     SendToMany(SendToManyInput),
     Unknown(Vec<u8>),
 
@@ -141,7 +141,7 @@ impl ToBytes for TransactionData {
             TransactionData::TransferAsset(d) => d.to_bytes(),
             TransactionData::IssueAsset(d) => d.to_bytes(),
             TransactionData::IpoBid(d) => d.to_bytes(),
-            TransactionData::SubmitWork(d) => d.to_bytes(),
+            TransactionData::SubmitWork { seed, nonce } => [seed.to_bytes(), nonce.to_bytes()].concat(),
             TransactionData::SendToMany(d) => d.to_bytes(),
             TransactionData::Unknown(d) => d.clone(),
             TransactionData::None => vec![]
@@ -162,11 +162,11 @@ impl TransactionData {
                 tx.to = QXID;
                 tx.amount = ISSUE_ASSET_FEE;
             },
-            Self::SubmitWork(_) => {
-                tx.to = ARBITRATOR;
-                tx.amount = 0;
-                tx.input_type = 0;
-                tx.input_size = core::mem::size_of::<Nonce>() as u16;
+            Self::SubmitWork { .. } => {
+                tx.to = QubicId::default();
+                tx.amount = 1_000_000;
+                tx.input_type = 2;
+                tx.input_size = (core::mem::size_of::<MiningSeed>() as u16) + (core::mem::size_of::<Nonce>() as u16);
             },
             Self::TransferAsset(_) => {
                 tx.input_type = 2;
@@ -238,12 +238,8 @@ impl FromBytes for TransactionWithData {
 
         match raw_tx.input_type {
             0 => {
-                if raw_tx.input_size as usize == core::mem::size_of::<Nonce>() && tx_data.len() == core::mem::size_of::<Nonce>() && raw_tx.amount == 0 {
-                    data = TransactionData::SubmitWork(Nonce(tx_data.try_into().unwrap()));
-                } else if raw_tx.input_size == 16 {
-                    let bid = unsafe {
-                        read_unaligned(tx_data.as_ptr() as *const ContractIpoBid)
-                    };
+    	        if raw_tx.input_size == 16 {
+                    let bid = ContractIpoBid::from_bytes(&tx_data)?;
 
                     data = TransactionData::IpoBid(bid);
                 } else if raw_tx.input_size == 0 {
@@ -270,7 +266,14 @@ impl FromBytes for TransactionWithData {
                 }
             },
             2 => {
-                if raw_tx.input_size as usize == core::mem::size_of::<IssueAssetInput>() {
+                if raw_tx.input_size as usize == (core::mem::size_of::<MiningSeed>() + core::mem::size_of::<Nonce>())
+                && tx_data.len() == (core::mem::size_of::<MiningSeed>() + core::mem::size_of::<Nonce>())
+                && raw_tx.amount == 1_000_000 {
+                    data = TransactionData::SubmitWork {
+                        seed: MiningSeed::from_bytes(&tx_data[..core::mem::size_of::<MiningSeed>()])?,
+                        nonce: Nonce::from_bytes(&tx_data[core::mem::size_of::<MiningSeed>()..])?
+                    };
+                } else if raw_tx.input_size as usize == core::mem::size_of::<IssueAssetInput>() {
                     let input = unsafe {
                         read_unaligned(tx_data.as_ptr() as *const TransferAssetInput)
                     };

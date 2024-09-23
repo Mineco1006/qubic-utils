@@ -17,6 +17,9 @@ pub use ethereum_types::{H256, H512, U256};
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Nonce(pub [u8; 32]);
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct MiningSeed(pub [u8; 32]);
+
 
 /// 64 byte SchnorrQ signature type
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
