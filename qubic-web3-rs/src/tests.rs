@@ -6,7 +6,7 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "194.45.36.144:21841";
+const COMPUTOR: &str = "185.132.201.163:21841"; // check https://app.qubic.li/network/live for current peers
 const _TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -44,7 +44,9 @@ fn test_tick_transactions() {
 
     let current_tick = client.qu().get_current_tick_info().unwrap();
 
-    let tick_txns = client.qu().request_tick_transactions(current_tick.tick - 10, TransactionFlags::all()).unwrap();
+    dbg!(current_tick);
+
+    let tick_txns = client.qu().request_tick_transactions(current_tick.tick - 5, TransactionFlags::all()).unwrap();
 
     for tx in &tick_txns {
         assert!(tx.verify());
@@ -110,7 +112,7 @@ fn test_subscription() {
                 NetworkEvent::BroadcastTransaction(tx) => {
                     if tx.verify() {
                         match tx.data {
-                            TransactionData::SubmitWork(_) => solutions += 1,
+                            TransactionData::SubmitWork { seed: _, nonce: _ } => solutions += 1,
                             _ => {
                                 transactions += 1
                             }
