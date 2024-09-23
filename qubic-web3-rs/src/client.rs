@@ -148,12 +148,14 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         }
         
         let gamming_key: [u8; 32] = gamming_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
-        let mut gamma = [0; 32];
+        let mut gamma = [0; 64];
+
         let mut kg = KangarooTwelve::hash(&gamming_key, &[]);
         kg.squeeze(&mut gamma);
 
         for i in 0..32 {
-            message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i];
+            message.solution_mining_seed.0[i] = solution.random_seed.0[i] ^ gamma[i];
+            message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i + 32];
         }
 
         for sig in message.signature.0.iter_mut() {
