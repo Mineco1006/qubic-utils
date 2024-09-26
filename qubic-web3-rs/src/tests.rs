@@ -6,7 +6,7 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "185.132.201.163:21841"; // check https://app.qubic.li/network/live for current peers
+const COMPUTOR: &str = "62.113.194.94:21841"; // check https://app.qubic.li/network/live for current peers
 const _TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -62,11 +62,25 @@ fn test_tick_data() {
 
     let current_tick = client.qu().get_current_tick_info().unwrap();
 
+    dbg!(current_tick);
     dbg!(std::mem::size_of::<TickData>());
 
-    let tick_data = client.qu().request_tick_data(current_tick.tick - 100).unwrap();
+    let tick_data = client.qu().request_tick_data(current_tick.tick - 10).unwrap();
 
     dbg!(tick_data);
+}
+
+#[cfg(not(any(feature = "async", feature = "http")))]
+#[test]
+fn test_mining_score() {
+    use qubic_types::QubicWallet;
+
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
+
+
+    let mining_score = client.qu().special_command_get_mining_ranking(&QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap()).unwrap();
+
+    println!("{:?}", mining_score);
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]

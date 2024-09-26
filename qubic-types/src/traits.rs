@@ -47,7 +47,7 @@ pub trait SetSignature {
     fn set_signature(&mut self, signature: Signature);
 }
 
-pub trait Sign where Self: GetSigner + ToBytes + FromBytes {
+pub trait Sign where Self: ToBytes + FromBytes {
     fn sign(&mut self, wallet: &QubicWallet) -> Result<(), QubicError>;
 }
 

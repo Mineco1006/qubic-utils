@@ -1,5 +1,7 @@
-use qubic_types::traits::{FromBytes, ToBytes};
-use qubic_types::Signature;
+use core::fmt::Debug;
+
+use qubic_types::{traits::{FromBytes, ToBytes, Sign}, errors::QubicError};
+use qubic_types::{QubicId, QubicWallet, Signature};
 use crate::consts::NUMBER_OF_COMPUTORS;
 
 use crate::utils::QubicRequest;
@@ -29,14 +31,16 @@ pub enum CommandType {
     SpecialCommandReissueVote                  = 11,
 
     SpecialCommandQueryTime                    = 12,
-    SpecialCommandSendTime                     = 13
+    SpecialCommandSendTime                     = 13,
+
+    SpecialCommandGetMiningScoreRanking        = 14,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C, align(8))]
+#[repr(C)]
 pub struct CommandDescriptor {
-    pub command_type: CommandType,
-    pub nonce: [u8; 7]
+    pub nonce: [u8; 7],
+    pub command_type: CommandType
 }
 
 #[cfg(feature = "std")]
@@ -73,13 +77,51 @@ macro_rules! set_command_type {
 #[repr(C)]
 pub struct SpecialCommand<T: ToBytes + FromBytes> {
     pub descriptor: CommandDescriptor,
-    pub payload: T
+    pub payload: T,
+    pub signature: Signature
+}
+
+impl<T: GetCommandType + ToBytes + FromBytes> SpecialCommand<T> {
+    pub fn new(payload: T, operator: &QubicWallet) -> Self {
+        let mut sc = Self {
+            descriptor: CommandDescriptor::new(T::get_command_type()),
+            payload,
+            signature: Signature::default()
+        };
+
+        sc.sign(operator).unwrap();
+
+        sc
+    }
+}
+
+impl<T: ToBytes + FromBytes> Sign for SpecialCommand<T> {
+    fn sign(&mut self, wallet: &QubicWallet) -> Result<(), QubicError> {
+
+        let mut bytes = self.to_bytes();
+
+        use tiny_keccak::{KangarooTwelve, Hasher, IntoXof, Xof};
+        let mut digest = [0; 32];
+        let mut kg = KangarooTwelve::new(b"");
+        kg.update(&bytes[..bytes.len() - core::mem::size_of::<Signature>()]);
+        kg.into_xof().squeeze(&mut digest);
+
+        let sig = wallet.sign_raw(digest);
+
+        let len = bytes.len();
+        bytes[len - core::mem::size_of::<Signature>()..len].copy_from_slice(&sig.to_bytes());
+
+        *self = SpecialCommand::<T>::from_bytes(&bytes).unwrap();
+
+        Ok(())
+    }
 }
 
 impl<T: ToBytes + FromBytes> ToBytes for SpecialCommand<T> {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = self.descriptor.to_bytes();
         bytes.extend(self.payload.to_bytes());
+        bytes.extend(self.signature.to_bytes());
         bytes
     }
 }
@@ -87,11 +129,13 @@ impl<T: ToBytes + FromBytes> ToBytes for SpecialCommand<T> {
 impl<T: ToBytes + FromBytes> FromBytes for SpecialCommand<T> {
     fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
         let desc = CommandDescriptor::from_bytes(&data[..core::mem::size_of::<CommandDescriptor>()])?;
-        let payload = T::from_bytes(&data[core::mem::size_of::<CommandDescriptor>()..])?;
+        let payload = T::from_bytes(&data[core::mem::size_of::<CommandDescriptor>()..data.len() - core::mem::size_of::<Signature>()])?;
+        let signature = Signature::from_bytes(&data[data.len() - core::mem::size_of::<Signature>()..])?;
 
         Ok(Self {
             descriptor: desc,
-            payload
+            payload,
+            signature
         })
     }
 }
@@ -241,4 +285,54 @@ pub struct SetEpochParams {
 #[repr(C)]
 pub struct SetTime {
     pub time: QubicSetUtcTime
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct MiningScoreEntry {
+    pub miner: QubicId,
+    pub score: u32
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GetMiningScoreRanking;
+
+set_command_type!(GetMiningScoreRanking, CommandType::SpecialCommandGetMiningScoreRanking);
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct MiningScoreRanking {
+    pub rankings: Vec<MiningScoreEntry>
+}
+
+impl Debug for MiningScoreRanking {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+
+        f.write_str(format!("{: >70} | {: >5} |", "Miner", "Score").as_str())?;
+
+        for entry in self.rankings.iter() {
+            f.write_str(format!("\n{: >70} | {: >5} |", entry.miner, entry.score).as_str())?;
+        }
+
+        Ok(())
+    }
+}
+
+impl FromBytes for MiningScoreRanking {
+    fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
+        let mut rankings = Vec::new();
+        let mut offset = 12;
+
+        if (data.len() - 12) % core::mem::size_of::<MiningScoreEntry>() != 0 {
+            return Err(qubic_types::errors::ByteEncodingError::InvalidDataLength { expected: (data.len() / core::mem::size_of::<MiningScoreEntry>()) * core::mem::size_of::<MiningScoreEntry>(), found: data.len() });
+        }
+
+        while offset < data.len() {
+            let entry = MiningScoreEntry::from_bytes(&data[offset..offset + core::mem::size_of::<MiningScoreEntry>()])?;
+            rankings.push(entry);
+            offset += core::mem::size_of::<MiningScoreEntry>();
+        }
+        
+
+        Ok(Self { rankings })
+    }
 }

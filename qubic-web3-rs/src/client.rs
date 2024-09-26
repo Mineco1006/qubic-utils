@@ -4,7 +4,7 @@ use std::{hash::Hash, marker::PhantomData, ptr::{copy_nonoverlapping, read_unali
 use std::{thread::JoinHandle, io::{Write, Read}};
 
 use crate::transport::Transport;
-use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, contracts::RequestContractFunction, qlogging::{QubicLog, RequestLog}, send_to_many::{SendToManyFeeOutput, SendToManyInput, SendToManyTransaction, SEND_TO_MANY_CONTRACT_INDEX}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity, SystemInfo}, Header, MessageType};
+use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, contracts::RequestContractFunction, qlogging::{QubicLog, RequestLog}, send_to_many::{SendToManyFeeOutput, SendToManyInput, SendToManyTransaction, SEND_TO_MANY_CONTRACT_INDEX}, special_commands::{GetMiningScoreRanking, MiningScoreRanking, SpecialCommand}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity, SystemInfo}, Header, MessageType};
 use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
@@ -377,6 +377,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
         self.transport.send_without_response(packet)?;
         Ok(hash)
+    }
+
+    pub fn special_command_get_mining_ranking(&self, operator: &QubicWallet) -> Result<MiningScoreRanking> {
+        let packet = Packet::new(SpecialCommand::new(GetMiningScoreRanking, operator), true);
+        
+        Ok(self.transport.send_with_response(packet)?)
     }
 }
 
