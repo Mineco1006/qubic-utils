@@ -81,31 +81,31 @@ async fn request_handler(State(state): State<Arc<Args>>, Json(rpc_method): Json<
         })
     }
 
-    let client = Client::<Tcp>::new(&state.computor).unwrap();
+    let client = Client::<Tcp>::new(&state.computor).await.unwrap();
 
     match rpc_method.request {
         RequestMethods::RequestComputors => {
-            let res = result_or_501!(client.qu().request_computors(), rpc_method);
+            let res = result_or_501!(client.qu().request_computors().await, rpc_method);
 
             early_return_result!(RequestResults::RequestComputors(res.into()), rpc_method);
         },
         RequestMethods::RequestCurrentTickInfo => {
-            let res = result_or_501!(client.qu().get_current_tick_info(), rpc_method);
+            let res = result_or_501!(client.qu().get_current_tick_info().await, rpc_method);
 
             early_return_result!(RequestResults::RequestCurrentTickInfo(res), rpc_method);
         },
         RequestMethods::RequestEntity(id) => {
-            let res = result_or_501!(client.qu().request_entity(id), rpc_method);
+            let res = result_or_501!(client.qu().request_entity(id).await, rpc_method);
 
             early_return_result!(RequestResults::RequestEntity(res.entity), rpc_method);
         },
         RequestMethods::SendTransaction(tx) => {
-            result_or_501!(client.qu().send_signed_transaction(tx), rpc_method);
+            result_or_501!(client.qu().send_signed_transaction(tx).await, rpc_method);
 
             early_return_result!(RequestResults::SendTransaction(tx.into()), rpc_method);
         },
         RequestMethods::RequestTickTransactions(tick) => {
-            let res = result_or_501!(client.qu().request_tick_transactions(tick, TransactionFlags::all()), rpc_method);
+            let res = result_or_501!(client.qu().request_tick_transactions(tick, TransactionFlags::all()).await, rpc_method);
 
             early_return_result!(RequestResults::RequestTickTransactions(res), rpc_method);
         }

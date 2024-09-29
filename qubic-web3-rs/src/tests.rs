@@ -206,7 +206,7 @@ async fn test() {
     let current_tick = dbg!(client.qu().get_current_tick_info().await.unwrap());
     let to = QubicId::from_str("BGKBSSHTGNLYOBUNOBYZNPEYDNABWKCHIWGOOUJRTGJOXTYPPWSXMGUAXHKI").unwrap();
     let wallet = QubicWallet::from_seed(seed).unwrap();
-    let entity = dbg!(client.qu().request_entity(wallet.public_key).await.unwrap());
+    let entity = dbg!(client.qu().request_entity(to).await.unwrap().entity);
     println!("{}", entity.public_key);
     let balance = entity.incoming_amount - entity.outgoing_amount;
     println!("Balance: {}", balance);
@@ -288,7 +288,7 @@ async fn test_read_only_qu() {
 #[cfg(any(feature = "async", feature = "http"))]
 #[tokio::test]
 async fn test_asset() {
-    let client = Client::<Tcp>::new(TESTNET).await.unwrap();
+    let client = Client::<Tcp>::new(_TESTNET).await.unwrap();
 
     dbg!(client.qu().request_entity(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).await.unwrap());
     dbg!(client.qx().request_owned_assets(QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap()).await.unwrap());

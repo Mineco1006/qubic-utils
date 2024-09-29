@@ -35,7 +35,7 @@ pub trait Transport {
 pub trait Transport {
     type Err;
 
-    async fn new(url: String) -> Result<Box<Self>, Self::Err>;
+    async fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err>;
 
     async fn send_without_response(&self, data: impl ToBytes) -> Result<()>;
 
@@ -58,9 +58,10 @@ pub struct Tcp {
 impl Transport for Tcp {
     type Err = Infallible;
 
-    async fn new(url: String) -> Result<Box<Self>, Self::Err> {
+    async fn new(url: String, timeout: Option<Duration>) -> Result<Box<Self>, Self::Err> {
         Ok(Box::new(Self {
-            url
+            url,
+            timeout: if let Some(timeout) = timeout { timeout } else { std::time::Duration::from_secs(5) }
         }))
     }
 
@@ -410,14 +411,18 @@ impl Transport for ConnectedTcp {
 impl Transport for ConnectedTcp {
     type Err = std::io::Error;
 
-    async fn new(url: String) -> Result<Box<Self>, Self::Err> {
-        let std_stream = std::net::TcpStream::connect(url)?;
+    async fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err> {
+        let std_stream = std::net::TcpStream::connect(url.clone())?;
+        let timeout = if let Some(timeout) = timeout { timeout } else { Duration::from_secs(5) };
+
         std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
         std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
         let stream = TcpStream::from_std(std_stream)?;
         Ok(
             Box::new(Self {
-                stream: RefCell::new(stream)
+                stream: RefCell::new(stream),
+                url,
+                timeout
             })
         )
     }
