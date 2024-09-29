@@ -47,9 +47,11 @@ impl<T: Transport> ClientBuilder<T> {
 
     #[cfg(any(feature = "async", feature = "http"))]
     pub async fn build(self) -> Result<Client<T>, T::Err> {
-        Ok(Client {
-            transport: T::new(self.url, self.timeout).await?,
-        })
+        Ok(
+            Client {
+                transport: T::new(self.url, self.timeout).await?
+            }
+        )
     }
 }
 
