@@ -187,7 +187,7 @@ pub struct RequestSystemInfo;
 set_message_type!(RequestSystemInfo, MessageType::RequestSystemInfo);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
+#[repr(C, packed)]
 pub struct SystemInfo {
     pub version: i16,
     pub epoch: u16,
@@ -201,7 +201,10 @@ pub struct SystemInfo {
     pub number_of_transactions: u32,
 
     pub random_mining_seed: [u8; 32],
-    pub solution_threshold: u32
+    pub solution_threshold: u32,
+
+    pub total_spectrum_amount: u64,
+    pub current_entity_balance_dust_threshold: u64
 }
 
 set_message_type!(SystemInfo, MessageType::RespondSystemInfo);
