@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 qubic-types = { path = "../qubic-types" }
-qubic-web3-rs = { path = "../qubic-web3-rs" }
+qubic-web3-rs = { path = "../qubic-web3-rs", features = ["async"] }
 axum = "0.7"
 tokio = { version = "*", features = ["full"] }
 serde = { version = "*", features = ["derive"] }

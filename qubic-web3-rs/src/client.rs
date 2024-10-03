@@ -36,11 +36,20 @@ impl<T: Transport> ClientBuilder<T> {
 
         self
     }
-
+    #[cfg(not(any(feature = "async", feature = "http")))]
     pub fn build(self) -> Result<Client<T>, T::Err> {
         Ok(
             Client {
                 transport: T::new(self.url, self.timeout)?
+            }
+        )
+    }
+
+    #[cfg(any(feature = "async", feature = "http"))]
+    pub async fn build(self) -> Result<Client<T>, T::Err> {
+        Ok(
+            Client {
+                transport: T::new(self.url, self.timeout).await?
             }
         )
     }
@@ -77,7 +86,7 @@ impl<T> Client<T> where T: Transport {
 impl<T> Client<T> where T: Transport {
     pub async fn new(url: impl ToString) -> Result<Self, T::Err> {
         Ok(Self {
-            transport: T::new(url.to_string()).await?
+            transport: T::new(url.to_string(), None).await?
         })
     }
 
@@ -539,7 +548,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
                 copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
-                let mut kg = KangarooTwelve::hash(shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().flatten(), &[]);
+                let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().into_iter().flatten().collect::<Vec<_>>(), &[]);
                 let mut gk = [0; 32];
                 kg.squeeze(&mut gk);
                 gamming_key = std::array::from_fn(|i| u64::from_le_bytes(gk[i*8..i*8 + 8].try_into().unwrap()));
@@ -580,7 +589,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         self.transport.send_with_response(packet).await
     }
 
-    pub async fn request_entity(&self, public_key: QubicId) -> Result<Entity> {
+    pub async fn request_entity(&self, public_key: QubicId) -> Result<RespondedEntity> {
         let packet = Packet::new(RequestEntity { public_key }, true);
         
         self.transport.send_with_response(packet).await
