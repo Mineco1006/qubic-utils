@@ -24,6 +24,31 @@ pub struct CurrentTickInfo {
 }
 set_message_type!(CurrentTickInfo, MessageType::RespondCurrentTickInfo);
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TickPeriod {
+    Idle { remaining: u32 },
+    Mining { remaining: u32 },
+}
+
+impl CurrentTickInfo {
+    pub fn tick_period(&self) -> TickPeriod {
+        let ticks_in_epoch = self.tick - self.initial_tick;
+
+        const MINING_TICKS: u32 = 676;
+        const IDLE_TICKS: u32 = 677;
+
+        let rem = ticks_in_epoch % (MINING_TICKS + IDLE_TICKS);
+
+        if rem < MINING_TICKS {
+            TickPeriod::Mining { remaining: MINING_TICKS - rem }
+        } else {
+            TickPeriod::Idle { remaining: MINING_TICKS + IDLE_TICKS - rem }
+        }
+    }
+} 
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]

@@ -6,7 +6,7 @@ use crate::qubic_types::traits::VerifySignature;
 
 use crate::{*, transport::Tcp, client::Client};
 
-const COMPUTOR: &str = "62.113.194.94:21841"; // check https://app.qubic.li/network/live for current peers
+const COMPUTOR: &str = "146.0.74.233:21841"; // check https://app.qubic.li/network/live for current peers
 const _TESTNET: &str = "57.129.19.155:31841";
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -82,6 +82,19 @@ fn test_mining_score() {
 
     println!("{:?}", mining_score);
 }
+
+#[cfg(not(any(feature = "async", feature = "http")))]
+#[test]
+fn test_period_detection() {
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
+
+
+    let current_tick = client.qu().get_current_tick_info().unwrap();
+
+
+    println!("{:?}", current_tick.tick_period());
+}
+
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
