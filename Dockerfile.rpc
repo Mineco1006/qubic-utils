@@ -1,0 +1,9 @@
+FROM rust:1 AS builder
+WORKDIR /qubic-utils
+COPY . /qubic-utils
+RUN cd /qubic-utils/qubic-rpc && cargo build --release
+
+FROM gcr.io/distroless/cc-debian12
+COPY --from=builder /qubic-utils/target/release/qubic-rpc /
+EXPOSE 2003
+CMD ["./qubic-rpc"]
