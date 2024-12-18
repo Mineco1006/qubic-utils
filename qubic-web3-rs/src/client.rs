@@ -141,6 +141,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
 
+        message.source_public_key = wallet.public_key;
+
         // If provided seed is the for computor public key, generate sharedKey into first 32 bytes to encrypt message
         if solution.public_key == wallet.public_key {
             if let Ok(shared_key) = wallet.get_shared_key() {
@@ -561,6 +563,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
+
+        message.source_public_key = wallet.public_key;
 
         // If provided seed is the for computor public key, generate sharedKey into first 32 bytes to encrypt message
         if solution.public_key == wallet.public_key {
