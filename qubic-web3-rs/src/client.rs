@@ -135,12 +135,25 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(hash)
     }
 
-    pub fn submit_work(&self, solution: WorkSolution) -> Result<()> {
+    pub fn submit_work(&self, wallet: &QubicWallet, solution: WorkSolution) -> Result<()> {
         let mut rng = rand::thread_rng();
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
-        
+
+        message.source_public_key = wallet.public_key;
+
+        // If provided seed is the for computor public key, generate sharedKey into first 32 bytes to encrypt message
+        if solution.public_key == wallet.public_key {
+            if let Ok(shared_key) = wallet.get_shared_key() {
+                for i in 0..4 {
+                    shared_key_and_gamming_nonce[i] = u64::from_le_bytes(
+                        shared_key[i*8..(i+1)*8].try_into().unwrap()
+                    );
+                }
+            }
+        }
+
         loop {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
@@ -155,7 +168,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                 break;
             }
         }
-        
+
         let gamming_key: [u8; 32] = gamming_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
         let mut gamma = [0; 64];
 
@@ -167,9 +180,16 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i + 32];
         }
 
-        for sig in message.signature.0.iter_mut() {
-            *sig = rng.gen();
-        }
+        let mut digest = [0u8; 32];
+        let message_size = std::mem::size_of::<BroadcastMessage>() - std::mem::size_of::<Signature>();
+        let message_ptr = &message as *const BroadcastMessage as *const u8;
+        let mut kg = KangarooTwelve::hash(
+            unsafe { std::slice::from_raw_parts(message_ptr, message_size) },
+            &[]
+        );
+        kg.squeeze(&mut digest);
+
+        message.signature = wallet.sign_raw(digest);
 
         self.transport.send_without_response(Packet::new(message, false))?;
         Ok(())
@@ -538,12 +558,25 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(())
     }
 
-    pub async fn submit_work(&self, solution: WorkSolution) -> Result<()> {
+    pub async fn submit_work(&self, wallet: &QubicWallet, solution: WorkSolution) -> Result<()> {
         let mut rng = rand::thread_rng();
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
-        
+
+        message.source_public_key = wallet.public_key;
+
+        // If provided seed is the for computor public key, generate sharedKey into first 32 bytes to encrypt message
+        if solution.public_key == wallet.public_key {
+            if let Ok(shared_key) = wallet.get_shared_key() {
+                for i in 0..4 {
+                    shared_key_and_gamming_nonce[i] = u64::from_le_bytes(
+                        shared_key[i*8..(i+1)*8].try_into().unwrap()
+                    );
+                }
+            }
+        }
+
         loop {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
@@ -558,19 +591,28 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                 break;
             }
         }
-        
+
         let gamming_key: [u8; 32] = gamming_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
-        let mut gamma = [0; 32];
+        let mut gamma = [0; 64];
+
         let mut kg = KangarooTwelve::hash(&gamming_key, &[]);
         kg.squeeze(&mut gamma);
 
         for i in 0..32 {
-            message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i];
+            message.solution_mining_seed.0[i] = solution.random_seed.0[i] ^ gamma[i];
+            message.solution_nonce.0[i] = solution.nonce.0[i] ^ gamma[i + 32];
         }
 
-        for sig in message.signature.0.iter_mut() {
-            *sig = rng.gen();
-        }
+        let mut digest = [0u8; 32];
+        let message_size = std::mem::size_of::<BroadcastMessage>() - std::mem::size_of::<Signature>();
+        let message_ptr = &message as *const BroadcastMessage as *const u8;
+        let mut kg = KangarooTwelve::hash(
+            unsafe { std::slice::from_raw_parts(message_ptr, message_size) },
+            &[]
+        );
+        kg.squeeze(&mut digest);
+
+        message.signature = wallet.sign_raw(digest);
 
         self.transport.send_without_response(Packet::new(message, false)).await?;
         Ok(())
