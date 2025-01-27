@@ -4,6 +4,7 @@ members = [
     "qubic-rs",
     "qubic-rpc",
     "vanity-id-generator",
+    "examples/*"
 ]
 resolver = "2"
 
