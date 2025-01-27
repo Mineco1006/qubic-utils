@@ -113,3 +113,6 @@ impl Header {
         self.message_type = new_type;
     }
 }
+
+#[cfg(test)]
+mod tests {} // TODO

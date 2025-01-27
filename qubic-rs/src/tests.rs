@@ -1,14 +1,15 @@
 use std::str::FromStr;
 
-use crate::qubic_rs::qubic_types::traits::VerifySignature;
-use qubic_rs::qubic_tcp_types::{
-    events::NetworkEvent,
-    prelude::TransactionFlags,
-    types::{ticks::TickData, ExchangePublicPeers},
+use crate::{
+    client::Client,
+    qubic_tcp_types::{
+        events::NetworkEvent,
+        prelude::TransactionFlags,
+        types::{ticks::TickData, ExchangePublicPeers},
+    },
+    qubic_types::{traits::VerifySignature, QubicId, QubicTxHash},
+    transport::Tcp,
 };
-use qubic_rs::qubic_types::{QubicId, QubicTxHash};
-
-use crate::{client::Client, transport::Tcp, *};
 
 const COMPUTOR: &str = "146.0.74.233:21841"; // check https://app.qubic.li/network/live for current peers
 const _TESTNET: &str = "57.129.19.155:31841";
@@ -16,11 +17,13 @@ const _TESTNET: &str = "57.129.19.155:31841";
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test() {
-    use qubic_rs::qubic_tcp_types::types::transactions::RawTransaction;
+    use crate::qubic_tcp_types::types::transactions::RawTransaction;
     let seed = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    use client::Client;
-    use qubic_rs::qubic_types::{QubicId, QubicWallet};
-    use transport::Tcp;
+    use crate::{
+        client::Client,
+        qubic_types::{QubicId, QubicWallet},
+        transport::Tcp,
+    };
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     let current_tick = dbg!(client.qu().get_current_tick_info().unwrap());
@@ -84,7 +87,7 @@ fn test_tick_data() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_mining_score() {
-    use qubic_rs::qubic_types::QubicWallet;
+    use crate::qubic_types::QubicWallet;
 
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
@@ -125,7 +128,7 @@ fn test_check() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_subscription() {
-    use qubic_rs::qubic_tcp_types::types::transactions::TransactionData;
+    use crate::qubic_tcp_types::types::transactions::TransactionData;
 
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
@@ -178,7 +181,7 @@ fn test_subscription() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_ipo() {
-    use qubic_rs::qubic_types::QubicWallet;
+    use crate::qubic_types::QubicWallet;
 
     let client = Client::<Tcp>::new("57.129.19.155:31841").unwrap();
     let wallet =
@@ -260,11 +263,11 @@ fn test_tick() {
 #[cfg(any(feature = "async", feature = "http"))]
 #[tokio::test]
 async fn test() {
-    use qubic_rs::qubic_tcp_types::prelude::*;
+    use crate::qubic_tcp_types::prelude::*;
     let seed = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    use client::Client;
-    use qubic_rs::qubic_types::{QubicId, QubicWallet};
-    use transport::Tcp;
+    use crate::client::Client;
+    use crate::qubic_types::{QubicId, QubicWallet};
+    use crate::transport::Tcp;
     let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
 
     let current_tick = dbg!(client.qu().get_current_tick_info().await.unwrap());

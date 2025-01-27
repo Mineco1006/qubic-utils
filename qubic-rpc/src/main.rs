@@ -1,14 +1,10 @@
-//! qubic-rpc is a Rust implementation of the Qubic RPC methods
+//! qubic-rpc is an RPC server for Qubic built on top of qubic-rs
 //!
 //! # Methods
 //!
 //! - This method
 //! ```rust,no_run
 //! ```
-//!
-//! # Examples
-//!
-//! The qubic-rpc repo contains [examples][examples] on how to use the many interfaces
 
 mod qubic_rpc_types;
 
@@ -209,3 +205,6 @@ async fn test() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {} // TODO
