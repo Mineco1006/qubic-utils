@@ -1,6 +1,6 @@
-use qubic_tcp_types::prelude::*;
-use qubic_types::{QubicId, QubicTxHash};
-use serde::{Serialize, Deserialize};
+use qubic_rs::qubic_tcp_types::prelude::*;
+use qubic_rs::qubic_types::{QubicId, QubicTxHash};
+use serde::{Deserialize, Serialize};
 
 mod serializeable_types;
 
@@ -13,7 +13,7 @@ pub enum RequestMethods {
     RequestEntity(QubicId),
     RequestComputors,
     SendTransaction(Transaction),
-    RequestTickTransactions(u32)
+    RequestTickTransactions(u32),
 }
 
 impl RequestMethods {
@@ -23,7 +23,7 @@ impl RequestMethods {
             Self::RequestCurrentTickInfo => Methods::RequestCurrentTickInfo,
             Self::RequestEntity(_) => Methods::RequestEntity,
             Self::SendTransaction(_) => Methods::SendTransaction,
-            Self::RequestTickTransactions(_) => Methods::RequestTickTransaction
+            Self::RequestTickTransactions(_) => Methods::RequestTickTransaction,
         }
     }
 }
@@ -33,7 +33,7 @@ pub struct QubicJsonRpcRequest {
     pub jsonrpc: String,
     pub id: u32,
     #[serde(flatten)]
-    pub request: RequestMethods
+    pub request: RequestMethods,
 }
 
 impl QubicJsonRpcRequest {
@@ -41,7 +41,7 @@ impl QubicJsonRpcRequest {
         Self {
             jsonrpc: "2.0".to_owned(),
             id,
-            request
+            request,
         }
     }
 }
@@ -53,7 +53,7 @@ pub enum RequestResults {
     RequestEntity(Entity),
     RequestComputors(ComputorInfos),
     SendTransaction(QubicTxHash),
-    RequestTickTransactions(Vec<TransactionWithData>)
+    RequestTickTransactions(Vec<TransactionWithData>),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,21 +63,21 @@ pub enum Methods {
     RequestEntity,
     RequestComputors,
     SendTransaction,
-    RequestTickTransaction
+    RequestTickTransaction,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestError {
     pub method: Methods,
-    pub error: String
+    pub error: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum ResponseType {
     Error(RequestError),
-    Result(RequestResults)
+    Result(RequestResults),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -87,5 +87,5 @@ pub struct QubicJsonRpcResponse {
     pub id: u32,
 
     #[serde(flatten)]
-    pub response: ResponseType
+    pub response: ResponseType,
 }

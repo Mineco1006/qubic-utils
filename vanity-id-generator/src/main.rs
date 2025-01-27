@@ -1,32 +1,33 @@
-use std::{time::Instant, thread::JoinHandle};
+use std::{thread::JoinHandle, time::Instant};
 
-use crossbeam_channel::{unbounded, Sender};
-use qubic_types::QubicWallet;
-use rand::Rng;
 use clap::Parser;
+use crossbeam_channel::{unbounded, Sender};
+use qubic_rs::qubic_types::QubicWallet;
+use rand::Rng;
 
 #[macro_use]
 extern crate log;
 
 #[derive(Debug, Parser)]
 struct Args {
-    
     #[arg(short, long)]
     threads: usize,
 
     #[arg(short, long)]
-    prefix: String
+    prefix: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::Builder::new().filter_level(log::LevelFilter::Info).init();
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .init();
     let opt = Args::parse();
     let (tx, rx) = unbounded::<Update>();
 
     info!("Looking for an ID matching {}", opt.prefix);
     let expected = (26f64).powi(opt.prefix.len() as i32);
     info!("Expected iterations required: {}", expected);
-    
+
     let mut now = Instant::now();
     info!("Starting {} worker threads", opt.threads);
     let _ = start_threads(opt.threads, opt.prefix, tx);
@@ -45,18 +46,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         info!("Found matching seed: {a}");
 
                         break 'outer;
-                    },
+                    }
                     Update::Checks(sims) => {
                         total += sims;
                         im += sims;
-                    } 
+                    }
                 }
             }
         }
 
         let checks_per_second = (im * 1000) as f64 / now.elapsed().as_millis() as f64;
 
-        info!("Expected Progress: {:.2}% | Time left (est): {:.0}s | Checkrate: {:.2} ch/s", (total as f64/expected)*100f64, (expected - total as f64)/checks_per_second, checks_per_second);
+        info!(
+            "Expected Progress: {:.2}% | Time left (est): {:.0}s | Checkrate: {:.2} ch/s",
+            (total as f64 / expected) * 100f64,
+            (expected - total as f64) / checks_per_second,
+            checks_per_second
+        );
 
         now = Instant::now();
         im = 0;
@@ -67,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 enum Update {
     Checks(u64),
-    Match(String)
+    Match(String),
 }
 
 fn start_threads(threads: usize, match_value: String, tx: Sender<Update>) -> Vec<JoinHandle<()>> {

@@ -2,12 +2,13 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(async_fn_in_trait)]
 
-
-pub mod transport;
 pub mod client;
+pub mod qubic_tcp_types;
+pub mod qubic_types;
+pub mod transport;
 
-pub extern crate qubic_tcp_types;
-pub extern crate qubic_types;
+#[macro_use]
+pub extern crate alloc;
 
 #[cfg(test)]
 mod tests;

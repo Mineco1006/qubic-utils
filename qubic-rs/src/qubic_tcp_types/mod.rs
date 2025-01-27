@@ -1,20 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-pub extern crate alloc;
 use rand::Rng;
 
-pub mod types;
-pub mod utils;
-pub mod prelude;
 pub mod consts;
 pub mod events;
+pub mod prelude;
+pub mod types;
+pub mod utils;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum MessageType {
     BroadcastMessage = 1,
-    
+
     ExchangePublicPeers = 0,
     BroadcastComputors = 2,
     BroadcastTick = 3,
@@ -53,7 +51,7 @@ pub enum MessageType {
     RequestSystemInfo = 46,
     RespondSystemInfo = 47,
 
-    ProcessSpecialCommand = 255
+    ProcessSpecialCommand = 255,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -64,12 +62,14 @@ pub struct Header {
     pub dejavu: u32,
 }
 
-
 impl Header {
     #[cfg(not(feature = "wasm"))]
     pub fn new(size: usize, message_type: MessageType, randomize_dejavu: bool) -> Self {
-        
-        let mut new = Self { size: [0; 3], message_type, dejavu: 0};
+        let mut new = Self {
+            size: [0; 3],
+            message_type,
+            dejavu: 0,
+        };
         new.set_size(size);
         if randomize_dejavu {
             new.randomize_dejavu();
@@ -79,8 +79,11 @@ impl Header {
     }
 
     pub fn new_with_dejavu(size: usize, message_type: MessageType, dejavu: u32) -> Self {
-        
-        let mut new = Self { size: [0; 3], message_type, dejavu: 0};
+        let mut new = Self {
+            size: [0; 3],
+            message_type,
+            dejavu: 0,
+        };
         new.set_size(size);
         new.dejavu = dejavu;
 
@@ -90,11 +93,11 @@ impl Header {
     pub fn get_size(&self) -> usize {
         (self.size[0] as usize) | (self.size[1] as usize) << 8 | (self.size[2] as usize) << 16
     }
-    
+
     pub fn set_size(&mut self, size: usize) {
         self.size[0] = size as u8;
-        self.size[1] = (size >> 8) as u8 ;
-        self.size[2] = (size >> 16) as u8 ;
+        self.size[1] = (size >> 8) as u8;
+        self.size[2] = (size >> 16) as u8;
     }
 
     pub fn zero_dejavu(&mut self) {

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-qubic-types = { path = "../qubic-types" }
+qubic-rs = { path = "../qubic-rs" }
 rand = "*"
 crossbeam-channel = "*"
 log = "*"

@@ -1,18 +1,24 @@
-
 use std::{cell::RefCell, convert::Infallible, time::Duration};
 #[cfg(not(any(feature = "async", feature = "http")))]
-use std::{net::TcpStream, io::{Write, Read}};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+};
 
 #[cfg(any(feature = "async", feature = "http"))]
 use tokio::net::TcpStream;
 
 use anyhow::Result;
 
-use qubic_tcp_types::{Header, types::{Packet, ExchangePublicPeers}, MessageType, utils::QubicRequest};
-use qubic_types::traits::{ToBytes, FromBytes};
+use crate::qubic_tcp_types::{
+    types::{ExchangePublicPeers, Packet},
+    utils::QubicRequest,
+    Header, MessageType,
+};
+use crate::qubic_types::traits::{FromBytes, ToBytes};
 
 #[cfg(any(feature = "async", feature = "http"))]
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 pub trait Transport {
@@ -22,12 +28,18 @@ pub trait Transport {
 
     fn send_without_response<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<()>;
 
-    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T>;
+    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<T>;
 
-    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>>;
+    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<Vec<T>>;
 
     fn get_url(&self) -> String;
- 
+
     fn connect(&self) -> Result<TcpStream>;
 }
 
@@ -35,22 +47,29 @@ pub trait Transport {
 pub trait Transport {
     type Err;
 
-    async fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err>;
+    async fn new(url: String, timeout: Option<std::time::Duration>)
+        -> Result<Box<Self>, Self::Err>;
 
     async fn send_without_response(&self, data: impl ToBytes) -> Result<()>;
 
-    async fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T>;
+    async fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<T>;
 
-    async fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>>;
+    async fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<Vec<T>>;
 
     async fn get_url(&self) -> String;
- 
+
     async fn connect(&self) -> Result<TcpStream>;
 }
 
 pub struct Tcp {
     pub(crate) url: String,
-    pub(crate) timeout: Duration
+    pub(crate) timeout: Duration,
 }
 
 /// Default timeout: 5s
@@ -61,7 +80,11 @@ impl Transport for Tcp {
     async fn new(url: String, timeout: Option<Duration>) -> Result<Box<Self>, Self::Err> {
         Ok(Box::new(Self {
             url,
-            timeout: if let Some(timeout) = timeout { timeout } else { std::time::Duration::from_secs(5) }
+            timeout: if let Some(timeout) = timeout {
+                timeout
+            } else {
+                std::time::Duration::from_secs(5)
+            },
         }))
     }
 
@@ -78,7 +101,10 @@ impl Transport for Tcp {
         Ok(())
     }
 
-    async fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T> {
+    async fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<T> {
         let std_stream = std::net::TcpStream::connect(&self.url)?;
 
         std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
@@ -93,7 +119,8 @@ impl Transport for Tcp {
 
         let mut header = Header::from_bytes(&header_buffer).unwrap();
 
-        let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
+        let offset = header.message_type == MessageType::ExchangePublicPeers
+            && D::get_message_type() != MessageType::ExchangePublicPeers;
 
         if offset {
             let mut flush_buf = vec![0; header.get_size() - std::mem::size_of::<Header>()];
@@ -115,7 +142,10 @@ impl Transport for Tcp {
         Ok(res)
     }
 
-    async fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>> {
+    async fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<Vec<T>> {
         let mut ret: Vec<T> = Vec::new();
 
         let std_stream = std::net::TcpStream::connect(&self.url)?;
@@ -141,14 +171,13 @@ impl Transport for Tcp {
 
             let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
-            
             stream.read_exact(&mut data_buffer).await?;
 
             let res = T::from_bytes(&data_buffer).unwrap();
 
             ret.push(res);
         }
-        
+
         Ok(ret)
     }
 
@@ -169,7 +198,11 @@ impl Transport for Tcp {
     fn new(url: String, timeout: Option<Duration>) -> Result<Box<Self>, Self::Err> {
         Ok(Box::new(Self {
             url,
-            timeout: if let Some(timeout) = timeout { timeout } else { std::time::Duration::from_secs(5) }
+            timeout: if let Some(timeout) = timeout {
+                timeout
+            } else {
+                std::time::Duration::from_secs(5)
+            },
         }))
     }
 
@@ -181,7 +214,10 @@ impl Transport for Tcp {
         Ok(())
     }
 
-    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T> {
+    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<T> {
         let mut stream = TcpStream::connect(&self.url)?;
 
         stream.set_read_timeout(Some(self.timeout))?;
@@ -194,7 +230,8 @@ impl Transport for Tcp {
 
         let mut header = Header::from_bytes(&header_buffer)?;
 
-        let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
+        let offset = header.message_type == MessageType::ExchangePublicPeers
+            && D::get_message_type() != MessageType::ExchangePublicPeers;
 
         if offset {
             let mut flush_buf = vec![0; header.get_size() - std::mem::size_of::<Header>()];
@@ -216,7 +253,10 @@ impl Transport for Tcp {
         Ok(res)
     }
 
-    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>> {
+    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<Vec<T>> {
         let mut ret: Vec<T> = Vec::new();
 
         let mut stream = TcpStream::connect(&self.url)?;
@@ -234,21 +274,19 @@ impl Transport for Tcp {
 
             let header = unsafe { *(header_buffer.as_ptr() as *const Header) };
 
-
             if header.message_type == MessageType::EndResponse {
                 break;
             }
 
             let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
-            
             stream.read_exact(&mut data_buffer)?;
 
             let res = T::from_bytes(&data_buffer)?;
 
             ret.push(res);
         }
-        
+
         Ok(ret)
     }
 
@@ -264,7 +302,7 @@ impl Transport for Tcp {
 pub struct ConnectedTcp {
     pub stream: RefCell<TcpStream>,
     pub url: String,
-    timeout: Duration
+    timeout: Duration,
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -273,23 +311,24 @@ impl Transport for ConnectedTcp {
 
     fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err> {
         let stream = TcpStream::connect(&url)?;
-        let timeout = if let Some(timeout) = timeout { timeout } else { Duration::from_secs(5) };
- 
+        let timeout = if let Some(timeout) = timeout {
+            timeout
+        } else {
+            Duration::from_secs(5)
+        };
+
         stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(timeout))?;
-        Ok(
-            Box::new(Self {
-                stream: RefCell::new(stream),
-                url,
-                timeout
-            })
-        )
+        Ok(Box::new(Self {
+            stream: RefCell::new(stream),
+            url,
+            timeout,
+        }))
     }
 
     fn send_without_response<D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<()> {
         let mut self_stream = self.stream.borrow_mut();
         match self_stream.write_all(&data.to_bytes()) {
-
             // auto reconnection
             Err(e) => {
                 let addr = self.get_url();
@@ -298,16 +337,18 @@ impl Transport for ConnectedTcp {
                 stream.set_write_timeout(Some(self.timeout))?;
                 *self_stream = stream;
 
-                return Err(e.into())
-            },
-            _ => ()
+                return Err(e.into());
+            }
+            _ => (),
         };
 
         Ok(())
     }
 
-    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T> {
-
+    fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<T> {
         let res: Result<T> = {
             self.stream.borrow_mut().flush()?;
 
@@ -318,7 +359,8 @@ impl Transport for ConnectedTcp {
 
             let mut header = Header::from_bytes(&header_buffer)?;
 
-            let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
+            let offset = header.message_type == MessageType::ExchangePublicPeers
+                && D::get_message_type() != MessageType::ExchangePublicPeers;
 
             if offset {
                 let mut flush_buf = vec![0; header.get_size() - std::mem::size_of::<Header>()];
@@ -339,7 +381,6 @@ impl Transport for ConnectedTcp {
 
             Ok(res)
         };
-        
 
         match res {
             Ok(r) => Ok(r),
@@ -354,8 +395,10 @@ impl Transport for ConnectedTcp {
         }
     }
 
-    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>> {
-
+    fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<Vec<T>> {
         let res: Result<Vec<T>> = {
             let mut ret: Vec<T> = Vec::new();
             self.stream.borrow_mut().flush()?;
@@ -367,24 +410,22 @@ impl Transport for ConnectedTcp {
 
                 let header = unsafe { *(header_buffer.as_ptr() as *const Header) };
 
-
                 if header.message_type == MessageType::EndResponse {
                     break;
                 }
 
                 let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
-                
                 self.stream.borrow_mut().read_exact(&mut data_buffer)?;
 
                 let res = T::from_bytes(&data_buffer)?;
 
                 ret.push(res);
             }
-            
+
             Ok(ret)
         };
-        
+
         match res {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -411,20 +452,25 @@ impl Transport for ConnectedTcp {
 impl Transport for ConnectedTcp {
     type Err = std::io::Error;
 
-    async fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err> {
+    async fn new(
+        url: String,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<Box<Self>, Self::Err> {
         let std_stream = std::net::TcpStream::connect(url.clone())?;
-        let timeout = if let Some(timeout) = timeout { timeout } else { Duration::from_secs(5) };
+        let timeout = if let Some(timeout) = timeout {
+            timeout
+        } else {
+            Duration::from_secs(5)
+        };
 
         std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
         std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
         let stream = TcpStream::from_std(std_stream)?;
-        Ok(
-            Box::new(Self {
-                stream: RefCell::new(stream),
-                url,
-                timeout
-            })
-        )
+        Ok(Box::new(Self {
+            stream: RefCell::new(stream),
+            url,
+            timeout,
+        }))
     }
 
     async fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
@@ -434,26 +480,31 @@ impl Transport for ConnectedTcp {
             std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
             *self.stream.borrow_mut() = TcpStream::from_std(std_stream)?;
 
-            return Err(e.into())
+            return Err(e.into());
         }
 
         Ok(())
     }
 
-    async fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<T> {
-
+    async fn send_with_response<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<T> {
         let res: Result<T> = {
-
             self.stream.borrow_mut().flush().await?;
 
             let mut header_buffer = vec![0; std::mem::size_of::<Header>()];
             self.stream.borrow_mut().write_all(&data.to_bytes()).await?;
 
-            self.stream.borrow_mut().read_exact(&mut header_buffer).await?;
+            self.stream
+                .borrow_mut()
+                .read_exact(&mut header_buffer)
+                .await?;
 
             let mut header = Header::from_bytes(&header_buffer).unwrap();
 
-            let offset = header.message_type == MessageType::ExchangePublicPeers && D::get_message_type() != MessageType::ExchangePublicPeers;
+            let offset = header.message_type == MessageType::ExchangePublicPeers
+                && D::get_message_type() != MessageType::ExchangePublicPeers;
 
             if offset {
                 let mut flush_buf = vec![0; header.get_size() - std::mem::size_of::<Header>()];
@@ -461,20 +512,25 @@ impl Transport for ConnectedTcp {
                 self.stream.borrow_mut().read_exact(&mut flush_buf).await?;
                 drop(flush_buf);
 
-                self.stream.borrow_mut().read_exact(&mut header_buffer).await?;
+                self.stream
+                    .borrow_mut()
+                    .read_exact(&mut header_buffer)
+                    .await?;
 
                 header = Header::from_bytes(&header_buffer).unwrap();
             }
 
             let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
 
-            self.stream.borrow_mut().read_exact(&mut data_buffer).await?;
+            self.stream
+                .borrow_mut()
+                .read_exact(&mut data_buffer)
+                .await?;
 
             let res = T::from_bytes(&data_buffer).unwrap();
 
             Ok(res)
         };
-        
 
         match res {
             Ok(r) => Ok(r),
@@ -489,8 +545,10 @@ impl Transport for ConnectedTcp {
         }
     }
 
-    async fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(&self, data: Packet<D>) -> Result<Vec<T>> {
-
+    async fn send_with_multiple_responses<T: FromBytes, D: QubicRequest + ToBytes>(
+        &self,
+        data: Packet<D>,
+    ) -> Result<Vec<T>> {
         let res: Result<Vec<T>> = {
             let mut ret: Vec<T> = Vec::new();
             let mut stream = self.stream.borrow_mut();
@@ -501,26 +559,25 @@ impl Transport for ConnectedTcp {
 
             loop {
                 stream.read_exact(&mut header_buffer).await?;
-    
+
                 let header = Header::from_bytes(&header_buffer).unwrap();
-    
+
                 if header.message_type == MessageType::EndResponse {
                     break;
                 }
-    
+
                 let mut data_buffer = vec![0; header.get_size() - std::mem::size_of::<Header>()];
-    
-                
+
                 stream.read_exact(&mut data_buffer).await?;
-    
+
                 let res = T::from_bytes(&data_buffer).unwrap();
-    
+
                 ret.push(res);
             }
-            
+
             Ok(ret)
         };
-        
+
         match res {
             Ok(r) => Ok(r),
             Err(e) => {

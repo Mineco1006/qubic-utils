@@ -1,46 +1,47 @@
 use core::fmt::Debug;
 
-use qubic_types::{traits::{FromBytes, ToBytes, Sign}, errors::QubicError};
-use qubic_types::{QubicId, QubicWallet, Signature};
-use crate::consts::NUMBER_OF_COMPUTORS;
+use crate::qubic_types::{
+    errors::QubicError,
+    traits::{FromBytes, Sign, ToBytes},
+    QubicId, QubicWallet, Signature,
+};
 
-use crate::utils::QubicRequest;
-
-use super::time::QubicSetUtcTime;
-
+use crate::qubic_tcp_types::{
+    consts::NUMBER_OF_COMPUTORS, types::time::QubicSetUtcTime, utils::QubicRequest,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CommandType {
-    SpecialCommandShutDown                     = 0,
-    SpecialCommandGetProposalAndBallotRequest  = 1,
+    SpecialCommandShutDown = 0,
+    SpecialCommandGetProposalAndBallotRequest = 1,
     SpecialCommandGetProposalAndBallotResponse = 2,
-    SpecialCommandSetProposalAndBallotRequest  = 3,
+    SpecialCommandSetProposalAndBallotRequest = 3,
     SpecialCommandSetProposalAndBallotResponse = 4,
-    SpecialCommandSetSolutionThresholdRequest  = 5,
+    SpecialCommandSetSolutionThresholdRequest = 5,
     SpecialCommandSetSolutionThresholdResponse = 6,
 
     /// F12
-    SpecialCommandToggleMainAuxRequest         = 7,
-    SpecialCommandToggleMainAuxResponse        = 8,
+    SpecialCommandToggleMainAuxRequest = 7,
+    SpecialCommandToggleMainAuxResponse = 8,
     /// F4
-    SpecialCommandRefreshPeerList              = 9,
+    SpecialCommandRefreshPeerList = 9,
     /// F5
-    SpecialCommandForceNextTick                = 10,
+    SpecialCommandForceNextTick = 10,
     /// F9
-    SpecialCommandReissueVote                  = 11,
+    SpecialCommandReissueVote = 11,
 
-    SpecialCommandQueryTime                    = 12,
-    SpecialCommandSendTime                     = 13,
+    SpecialCommandQueryTime = 12,
+    SpecialCommandSendTime = 13,
 
-    SpecialCommandGetMiningScoreRanking        = 14,
+    SpecialCommandGetMiningScoreRanking = 14,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct CommandDescriptor {
     pub nonce: [u8; 7],
-    pub command_type: CommandType
+    pub command_type: CommandType,
 }
 
 #[cfg(feature = "std")]
@@ -48,13 +49,16 @@ impl CommandDescriptor {
     pub fn new(command_type: CommandType) -> Self {
         let mut nonce = [0u8; 7];
 
-        let now = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         nonce.copy_from_slice(&now.to_le_bytes()[..7]);
 
         Self {
             command_type,
-            nonce
+            nonce,
         }
     }
 }
@@ -78,7 +82,7 @@ macro_rules! set_command_type {
 pub struct SpecialCommand<T: ToBytes + FromBytes> {
     pub descriptor: CommandDescriptor,
     pub payload: T,
-    pub signature: Signature
+    pub signature: Signature,
 }
 
 impl<T: GetCommandType + ToBytes + FromBytes> SpecialCommand<T> {
@@ -86,7 +90,7 @@ impl<T: GetCommandType + ToBytes + FromBytes> SpecialCommand<T> {
         let mut sc = Self {
             descriptor: CommandDescriptor::new(T::get_command_type()),
             payload,
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         sc.sign(operator).unwrap();
@@ -97,10 +101,9 @@ impl<T: GetCommandType + ToBytes + FromBytes> SpecialCommand<T> {
 
 impl<T: ToBytes + FromBytes> Sign for SpecialCommand<T> {
     fn sign(&mut self, wallet: &QubicWallet) -> Result<(), QubicError> {
-
         let mut bytes = self.to_bytes();
 
-        use tiny_keccak::{KangarooTwelve, Hasher, IntoXof, Xof};
+        use tiny_keccak::{Hasher, IntoXof, KangarooTwelve, Xof};
         let mut digest = [0; 32];
         let mut kg = KangarooTwelve::new(b"");
         kg.update(&bytes[..bytes.len() - core::mem::size_of::<Signature>()]);
@@ -127,22 +130,27 @@ impl<T: ToBytes + FromBytes> ToBytes for SpecialCommand<T> {
 }
 
 impl<T: ToBytes + FromBytes> FromBytes for SpecialCommand<T> {
-    fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
-        let desc = CommandDescriptor::from_bytes(&data[..core::mem::size_of::<CommandDescriptor>()])?;
-        let payload = T::from_bytes(&data[core::mem::size_of::<CommandDescriptor>()..data.len() - core::mem::size_of::<Signature>()])?;
-        let signature = Signature::from_bytes(&data[data.len() - core::mem::size_of::<Signature>()..])?;
+    fn from_bytes(data: &[u8]) -> Result<Self, crate::qubic_types::errors::ByteEncodingError> {
+        let desc =
+            CommandDescriptor::from_bytes(&data[..core::mem::size_of::<CommandDescriptor>()])?;
+        let payload = T::from_bytes(
+            &data[core::mem::size_of::<CommandDescriptor>()
+                ..data.len() - core::mem::size_of::<Signature>()],
+        )?;
+        let signature =
+            Signature::from_bytes(&data[data.len() - core::mem::size_of::<Signature>()..])?;
 
         Ok(Self {
             descriptor: desc,
             payload,
-            signature
+            signature,
         })
     }
 }
 
 impl<T: ToBytes + FromBytes> QubicRequest for SpecialCommand<T> {
-    fn get_message_type() -> crate::MessageType {
-        crate::MessageType::ProcessSpecialCommand
+    fn get_message_type() -> crate::qubic_tcp_types::MessageType {
+        crate::qubic_tcp_types::MessageType::ProcessSpecialCommand
     }
 }
 
@@ -150,7 +158,7 @@ impl<T: ToBytes + FromBytes> QubicRequest for SpecialCommand<T> {
 #[repr(C)]
 pub struct Proposal {
     pub uri_size: u8,
-    pub uri: [u8; 255]
+    pub uri: [u8; 255],
 }
 
 impl Proposal {
@@ -164,9 +172,10 @@ impl Proposal {
 
         uri_buffer[0..uri.len()].copy_from_slice(uri);
 
-        Some(
-            Self { uri_size: uri.len() as u8, uri: uri_buffer }
-        )
+        Some(Self {
+            uri_size: uri.len() as u8,
+            uri: uri_buffer,
+        })
     }
 }
 
@@ -174,37 +183,43 @@ impl Proposal {
 #[repr(C)]
 pub struct Ballot {
     pub zero: u8,
-    pub votes: [u8; (NUMBER_OF_COMPUTORS * 3 + 7)/8],
-    pub quasi_random_number: u8
+    pub votes: [u8; (NUMBER_OF_COMPUTORS * 3 + 7) / 8],
+    pub quasi_random_number: u8,
 }
 
 impl Default for Ballot {
     fn default() -> Self {
-        Self { zero: 0, votes: [0; (NUMBER_OF_COMPUTORS * 3 + 7)/8], quasi_random_number: 0 }
+        Self {
+            zero: 0,
+            votes: [0; (NUMBER_OF_COMPUTORS * 3 + 7) / 8],
+            quasi_random_number: 0,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VoteOption {
     NotVoted,
-    Option(u8)
+    Option(u8),
 }
 
 impl Ballot {
     pub fn get_computor_vote(&self, computor_index: usize) -> VoteOption {
-        let compressed_index = (computor_index*3)/8;
+        let compressed_index = (computor_index * 3) / 8;
         let index_offset = computor_index % 3;
         let expanded_index = 8 - index_offset;
 
         let vote = if index_offset == 0 {
             (self.votes[compressed_index] >> expanded_index) & 0b111
         } else {
-            ((self.votes[compressed_index] >> expanded_index) & (u8::MAX >> expanded_index)) | ((self.votes[compressed_index + 1] & (u8::MAX >> (8 - 3 + index_offset))) << index_offset)
+            ((self.votes[compressed_index] >> expanded_index) & (u8::MAX >> expanded_index))
+                | ((self.votes[compressed_index + 1] & (u8::MAX >> (8 - 3 + index_offset)))
+                    << index_offset)
         };
-        
+
         if vote == 0 {
             VoteOption::NotVoted
-        } else{
+        } else {
             VoteOption::Option(vote)
         }
     }
@@ -224,10 +239,13 @@ impl Ballot {
 pub struct GetProposalAndBallotRequest {
     pub computor_index: u16,
     pub padding: [u8; 6],
-    pub signature: Signature
+    pub signature: Signature,
 }
 
-set_command_type!(GetProposalAndBallotRequest, CommandType::SpecialCommandGetProposalAndBallotRequest);
+set_command_type!(
+    GetProposalAndBallotRequest,
+    CommandType::SpecialCommandGetProposalAndBallotRequest
+);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -235,10 +253,13 @@ pub struct GetProposalAndBallotResponse {
     pub computor_index: u16,
     pub padding: [u8; 6],
     pub proposal: Proposal,
-    pub ballot: Ballot
+    pub ballot: Ballot,
 }
 
-set_command_type!(GetProposalAndBallotResponse, CommandType::SpecialCommandGetProposalAndBallotResponse);
+set_command_type!(
+    GetProposalAndBallotResponse,
+    CommandType::SpecialCommandGetProposalAndBallotResponse
+);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -247,10 +268,13 @@ pub struct SetProposalAndBallotRequest {
     pub padding: [u8; 6],
     pub proposal: Proposal,
     pub ballot: Ballot,
-    pub signature: Signature
+    pub signature: Signature,
 }
 
-set_command_type!(SetProposalAndBallotRequest, CommandType::SpecialCommandSetProposalAndBallotRequest);
+set_command_type!(
+    SetProposalAndBallotRequest,
+    CommandType::SpecialCommandSetProposalAndBallotRequest
+);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -259,54 +283,59 @@ pub struct SetProposalAndBallotResponse {
     pub padding: [u8; 6],
 }
 
-set_command_type!(SetProposalAndBallotResponse, CommandType::SpecialCommandSetProposalAndBallotResponse);
+set_command_type!(
+    SetProposalAndBallotResponse,
+    CommandType::SpecialCommandSetProposalAndBallotResponse
+);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum NodeMode {
     Aux = 0,
-    Main = 1
+    Main = 1,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct ToggleMainMode {
-    pub mode: NodeMode
+    pub mode: NodeMode,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct SetEpochParams {
     pub epoch: u32,
-    pub treshold: i32
+    pub treshold: i32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct SetTime {
-    pub time: QubicSetUtcTime
+    pub time: QubicSetUtcTime,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct MiningScoreEntry {
     pub miner: QubicId,
-    pub score: u32
+    pub score: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GetMiningScoreRanking;
 
-set_command_type!(GetMiningScoreRanking, CommandType::SpecialCommandGetMiningScoreRanking);
+set_command_type!(
+    GetMiningScoreRanking,
+    CommandType::SpecialCommandGetMiningScoreRanking
+);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct MiningScoreRanking {
-    pub rankings: Vec<MiningScoreEntry>
+    pub rankings: Vec<MiningScoreEntry>,
 }
 
 impl Debug for MiningScoreRanking {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-
         f.write_str(format!("{: >70} | {: >5} |", "Miner", "Score").as_str())?;
 
         for entry in self.rankings.iter() {
@@ -318,20 +347,27 @@ impl Debug for MiningScoreRanking {
 }
 
 impl FromBytes for MiningScoreRanking {
-    fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
+    fn from_bytes(data: &[u8]) -> Result<Self, crate::qubic_types::errors::ByteEncodingError> {
         let mut rankings = Vec::new();
         let mut offset = 12;
 
         if (data.len() - 12) % core::mem::size_of::<MiningScoreEntry>() != 0 {
-            return Err(qubic_types::errors::ByteEncodingError::InvalidDataLength { expected: (data.len() / core::mem::size_of::<MiningScoreEntry>()) * core::mem::size_of::<MiningScoreEntry>(), found: data.len() });
+            return Err(
+                crate::qubic_types::errors::ByteEncodingError::InvalidDataLength {
+                    expected: (data.len() / core::mem::size_of::<MiningScoreEntry>())
+                        * core::mem::size_of::<MiningScoreEntry>(),
+                    found: data.len(),
+                },
+            );
         }
 
         while offset < data.len() {
-            let entry = MiningScoreEntry::from_bytes(&data[offset..offset + core::mem::size_of::<MiningScoreEntry>()])?;
+            let entry = MiningScoreEntry::from_bytes(
+                &data[offset..offset + core::mem::size_of::<MiningScoreEntry>()],
+            )?;
             rankings.push(entry);
             offset += core::mem::size_of::<MiningScoreEntry>();
         }
-        
 
         Ok(Self { rankings })
     }

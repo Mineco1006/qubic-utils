@@ -1,5 +1,5 @@
 [package]
-name = "qubic-web3-rs"
+name = "qubic-rs"
 version = "0.2.0"
 edition = "2021"
 
@@ -17,7 +17,6 @@ thiserror-no-std = { version = "*" }
 thiserror = { version = "*", optional = true }
 four-q = { path = "../four-q-rs" }
 tiny-keccak = { version = "2.0", default-features = false, features = ["k12"]}
-serde = { version = "*", default-features = false, features = ["derive"]}
 ethereum-types = { version = "0.14.1", default-features = false}
 hex = { version = "*", default-features = false, features = ["serde"]}
 getrandom = { version = "*", features = ["js"], optional = true}

@@ -1,35 +1,50 @@
-use std::{fs::File, io::{BufReader, Read}, path::Path};
-use qubic_tcp_types::types::Entity;
-use qubic_types::QubicId;
 use anyhow::Result;
+use qubic_rs::qubic_tcp_types::types::Entity;
+use qubic_rs::qubic_types::QubicId;
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::Path,
+};
 
 pub const SPECTRUM_DEPTH: usize = 24;
 pub const SPECTRUM_CAPACITY: usize = 0x1000000;
 
-
 pub struct SpectrumFile {
     spectrum: Vec<Entity>,
-    compressed: Vec<Entity>
+    compressed: Vec<Entity>,
 }
 
 impl SpectrumFile {
     pub fn load_file(file: &str) -> Result<Self> {
         let path = Path::new(file);
 
-        let mut spectrum = vec![Entity { public_key: QubicId::default(), incoming_amount: 0, outgoing_amount: 0, number_of_incoming_transfers: 0, number_of_outgoing_transfers: 0, latest_incoming_transfer_tick: 0, latest_outgoing_transfer_tick: 0 }; SPECTRUM_CAPACITY];
+        let mut spectrum = vec![
+            Entity {
+                public_key: QubicId::default(),
+                incoming_amount: 0,
+                outgoing_amount: 0,
+                number_of_incoming_transfers: 0,
+                number_of_outgoing_transfers: 0,
+                latest_incoming_transfer_tick: 0,
+                latest_outgoing_transfer_tick: 0
+            };
+            SPECTRUM_CAPACITY
+        ];
 
         let file = File::open(path)?;
 
         let mut reader = BufReader::new(file);
 
         unsafe {
-            let slice = std::ptr::slice_from_raw_parts_mut(spectrum.as_mut_ptr() as *mut u8, SPECTRUM_CAPACITY * std::mem::size_of::<Entity>());
+            let slice = std::ptr::slice_from_raw_parts_mut(
+                spectrum.as_mut_ptr() as *mut u8,
+                SPECTRUM_CAPACITY * std::mem::size_of::<Entity>(),
+            );
             reader.read_exact(&mut *slice)?;
         }
 
         let mut compressed: Vec<Entity> = Vec::new();
-
-        
 
         for e in spectrum.iter() {
             if e.incoming_amount - e.outgoing_amount != 0 {
@@ -39,21 +54,19 @@ impl SpectrumFile {
 
         compressed.sort_by_key(|e1| (e1.balance()));
 
-        Ok(
-            Self {
-                spectrum,
-                compressed
-            }
-        )
+        Ok(Self {
+            spectrum,
+            compressed,
+        })
     }
 
     pub fn get_spectrum_index(&self, public_key: &QubicId) -> Option<usize> {
-    
         if public_key.0 == QubicId::default().0 {
             return None;
         }
 
-        let mut index = u32::from_le_bytes(public_key.0[..4].try_into().unwrap()) as usize & (SPECTRUM_CAPACITY - 1);
+        let mut index = u32::from_le_bytes(public_key.0[..4].try_into().unwrap()) as usize
+            & (SPECTRUM_CAPACITY - 1);
 
         loop {
             if self.spectrum[index].public_key.0 == public_key.0 {
@@ -74,11 +87,11 @@ impl SpectrumFile {
 
     pub fn increase_energy(&mut self, public_key: &QubicId, amount: u64, tick: u32) {
         if public_key.0 != QubicId::default().0 {
-
-            let mut index = u32::from_le_bytes(public_key.0[..4].try_into().unwrap()) as usize & (SPECTRUM_CAPACITY - 1);
+            let mut index = u32::from_le_bytes(public_key.0[..4].try_into().unwrap()) as usize
+                & (SPECTRUM_CAPACITY - 1);
 
             loop {
-                if self.spectrum[index].public_key.0 == public_key.0  {
+                if self.spectrum[index].public_key.0 == public_key.0 {
                     self.spectrum[index].incoming_amount += amount;
                     self.spectrum[index].number_of_incoming_transfers += 1;
                     self.spectrum[index].latest_incoming_transfer_tick = tick;
@@ -139,18 +152,18 @@ impl SpectrumFile {
     }
 }
 
-
-
 #[test]
 fn test() {
     use std::str::FromStr;
     let spectrum = SpectrumFile::load_file("spectrum/spectrum.090").unwrap();
 
-    let index = spectrum.get_spectrum_index(&QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap());
+    let index = spectrum.get_spectrum_index(
+        &QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA").unwrap(),
+    );
 
-    dbg!(spectrum.get_supply()/1_000_000_000);
+    dbg!(spectrum.get_supply() / 1_000_000_000);
     let th = spectrum.get_top_holders(10);
-    dbg!(th.iter().map(|e| e.balance()).sum::<u64>()/1_000_000_000);
+    dbg!(th.iter().map(|e| e.balance()).sum::<u64>() / 1_000_000_000);
     dbg!(spectrum.get_amount_min(1_000_000_000));
 
     if let Some(index) = index {

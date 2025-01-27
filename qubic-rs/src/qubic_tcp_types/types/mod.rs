@@ -1,20 +1,20 @@
 #[macro_use]
 mod macros;
-pub mod transactions;
+pub mod assets;
+pub mod contracts;
+pub mod qlogging;
+pub mod send_to_many;
+pub mod special_commands;
 pub mod ticks;
 pub mod time;
 pub mod token;
-pub mod assets;
-pub mod special_commands;
-pub mod qlogging;
-pub mod send_to_many;
-pub mod contracts;
+pub mod transactions;
 
+use crate::qubic_types::{traits::ToBytes, MiningSeed, Nonce, QubicId, Signature};
 use core::net::Ipv4Addr;
-use qubic_types::{traits::ToBytes, MiningSeed, Nonce, QubicId, Signature};
 use time::QubicTime;
 
-use crate::{consts::SPECTRUM_DEPTH, utils::QubicRequest, Header, MessageType};
+use crate::qubic_tcp_types::{consts::SPECTRUM_DEPTH, utils::QubicRequest, Header, MessageType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -25,7 +25,7 @@ pub struct BroadcastMessage {
     pub gamming_nonce: Nonce,
     pub solution_mining_seed: MiningSeed,
     pub solution_nonce: Nonce,
-    pub signature: Signature
+    pub signature: Signature,
 }
 set_message_type!(BroadcastMessage, MessageType::BroadcastMessage);
 
@@ -45,7 +45,7 @@ impl From<WorkSolution> for BroadcastMessage {
             gamming_nonce: Nonce::default(),
             solution_mining_seed: MiningSeed::default(),
             solution_nonce: Nonce::default(),
-            signature: Signature::default()
+            signature: Signature::default(),
         }
     }
 }
@@ -54,7 +54,7 @@ impl From<WorkSolution> for BroadcastMessage {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RequestEntity {
-    pub public_key: QubicId
+    pub public_key: QubicId,
 }
 
 set_message_type!(RequestEntity, MessageType::RequestEntity);
@@ -66,7 +66,7 @@ pub struct RespondedEntity {
     pub entity: Entity,
     pub tick: u32,
     pub spectrum_index: u32,
-    pub siblings: [QubicId; SPECTRUM_DEPTH]
+    pub siblings: [QubicId; SPECTRUM_DEPTH],
 }
 
 set_message_type!(RespondedEntity, MessageType::RespondEntity);
@@ -81,7 +81,7 @@ pub struct Entity {
     pub number_of_incoming_transfers: u32,
     pub number_of_outgoing_transfers: u32,
     pub latest_incoming_transfer_tick: u32,
-    pub latest_outgoing_transfer_tick: u32
+    pub latest_outgoing_transfer_tick: u32,
 }
 
 impl Entity {
@@ -101,7 +101,7 @@ set_message_type!(RequestComputors, MessageType::RequestComputors);
 pub struct Computors {
     pub epoch: u16,
     pub public_key: [QubicId; 676],
-    pub signature: Signature
+    pub signature: Signature,
 }
 
 set_message_type!(Computors, MessageType::BroadcastComputors);
@@ -110,7 +110,7 @@ set_message_type!(Computors, MessageType::BroadcastComputors);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RequestContractIpo {
-    pub contract_index: u32
+    pub contract_index: u32,
 }
 
 set_message_type!(RequestContractIpo, MessageType::RequestContractIPO);
@@ -121,7 +121,7 @@ pub struct ContractIpo {
     pub contract_index: u32,
     pub tick: u32,
     pub public_keys: [QubicId; 676],
-    pub prices: [u64; 676]
+    pub prices: [u64; 676],
 }
 
 set_message_type!(ContractIpo, MessageType::RespondContractIPO);
@@ -131,31 +131,30 @@ set_message_type!(ContractIpo, MessageType::RespondContractIPO);
 #[repr(C)]
 pub struct ContractIpoBid {
     pub price: u64,
-    pub quantity: u16
+    pub quantity: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct ExchangePublicPeers {
-    pub peers: [Ipv4Addr; 4]
+    pub peers: [Ipv4Addr; 4],
 }
 
 impl Default for ExchangePublicPeers {
     fn default() -> Self {
-        Self { 
-            peers: [Ipv4Addr::new(0, 0, 0, 0); 4]
+        Self {
+            peers: [Ipv4Addr::new(0, 0, 0, 0); 4],
         }
     }
 }
 
 set_message_type!(ExchangePublicPeers, MessageType::ExchangePublicPeers);
 
-
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct Packet<T> {
     pub header: Header,
-    pub data: T
+    pub data: T,
 }
 
 #[cfg(all(feature = "std", not(feature = "wasm")))]
@@ -164,8 +163,12 @@ impl<T: ToBytes + QubicRequest> Packet<T> {
         let data_size = data.to_bytes().len();
 
         Self {
-            header: Header::new(core::mem::size_of::<Header>() + data_size, T::get_message_type(), randomize_dejavu),
-            data
+            header: Header::new(
+                core::mem::size_of::<Header>() + data_size,
+                T::get_message_type(),
+                randomize_dejavu,
+            ),
+            data,
         }
     }
 }
@@ -175,7 +178,7 @@ impl<T: ToBytes> ToBytes for Packet<T> {
         let mut buffer = self.header.to_bytes();
 
         buffer.extend(self.data.to_bytes());
-        
+
         buffer
     }
 }
@@ -204,7 +207,7 @@ pub struct SystemInfo {
     pub solution_threshold: u32,
 
     pub total_spectrum_amount: u64,
-    pub current_entity_balance_dust_threshold: u64
+    pub current_entity_balance_dust_threshold: u64,
 }
 
 set_message_type!(SystemInfo, MessageType::RespondSystemInfo);

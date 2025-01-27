@@ -10,14 +10,18 @@
 //!
 //! The qubic-rpc repo contains [examples][examples] on how to use the many interfaces
 
+mod qubic_rpc_types;
+
 use axum::http::Method;
 use axum::{extract::State, routing::post, Json, Router};
 use clap::Parser;
-use qubic_rpc_types::{
+
+use crate::qubic_rpc_types::{
     QubicJsonRpcRequest, QubicJsonRpcResponse, RequestError, RequestMethods, RequestResults,
     ResponseType,
 };
-use qubic_web3_rs::{
+
+use qubic_rs::{
     client::Client, qubic_tcp_types::types::transactions::TransactionFlags, transport::Tcp,
 };
 use std::sync::Arc;

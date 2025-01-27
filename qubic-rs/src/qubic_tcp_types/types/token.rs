@@ -1,4 +1,4 @@
-use qubic_types::{QubicId, H256};
+use crate::qubic_types::{QubicId, H256};
 
 macro_rules! impl_tokenize {
     ($impl: ty, $var: ident) => {

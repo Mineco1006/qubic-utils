@@ -1,8 +1,11 @@
 use core::fmt::Debug;
 
-use qubic_types::{Signature, H256, QubicTxHash};
+use crate::qubic_types::{QubicTxHash, Signature, H256};
 
-use crate::{MessageType, consts::{NUMBER_OF_TRANSACTION_PER_TICK, NUMBER_OF_COMPUTORS, MAX_NUMBER_OF_CONTRACTS}};
+use crate::qubic_tcp_types::{
+    consts::{MAX_NUMBER_OF_CONTRACTS, NUMBER_OF_COMPUTORS, NUMBER_OF_TRANSACTION_PER_TICK},
+    MessageType,
+};
 
 use super::time::QubicTime;
 
@@ -20,10 +23,9 @@ pub struct CurrentTickInfo {
     pub tick: u32,
     pub number_of_aligned_votes: u16,
     pub number_of_misaligned_votes: u16,
-    pub initial_tick: u32
+    pub initial_tick: u32,
 }
 set_message_type!(CurrentTickInfo, MessageType::RespondCurrentTickInfo);
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -42,18 +44,22 @@ impl CurrentTickInfo {
         let rem = ticks_in_epoch % (MINING_TICKS + IDLE_TICKS);
 
         if rem < MINING_TICKS {
-            TickPeriod::Mining { remaining: MINING_TICKS - rem }
+            TickPeriod::Mining {
+                remaining: MINING_TICKS - rem,
+            }
         } else {
-            TickPeriod::Idle { remaining: MINING_TICKS + IDLE_TICKS - rem }
+            TickPeriod::Idle {
+                remaining: MINING_TICKS + IDLE_TICKS - rem,
+            }
         }
     }
-} 
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct RequestTickData {
-    pub tick: u32
+    pub tick: u32,
 }
 
 set_message_type!(RequestTickData, MessageType::RequestTickData);
@@ -71,7 +77,7 @@ pub struct TickData {
     pub transaction_digest: [QubicTxHash; NUMBER_OF_TRANSACTION_PER_TICK],
     pub contract_fees: [u64; MAX_NUMBER_OF_CONTRACTS],
 
-    pub signature: Signature
+    pub signature: Signature,
 }
 
 set_message_type!(TickData, MessageType::BroadcastFutureTickData);
@@ -97,7 +103,7 @@ pub struct Tick {
 
     pub transaction_digest: H256,
     pub expected_next_tick_transaction_digest: H256,
-    pub signature: Signature
+    pub signature: Signature,
 }
 
 set_message_type!(Tick, MessageType::BroadcastTick);
@@ -106,7 +112,7 @@ set_message_type!(Tick, MessageType::BroadcastTick);
 #[repr(C)]
 pub struct QuorumTickData {
     pub tick: u32,
-    pub vote_flags: [u8; (NUMBER_OF_COMPUTORS + 7)/8]
+    pub vote_flags: [u8; (NUMBER_OF_COMPUTORS + 7) / 8],
 }
 
 set_message_type!(QuorumTickData, MessageType::RequestQuorumTick);

@@ -1,12 +1,12 @@
-use qubic_tcp_types::types::Computors;
-use qubic_types::{QubicId, Signature};
-use serde::{Serialize, Deserialize};
+use qubic_rs::qubic_tcp_types::types::Computors;
+use qubic_rs::qubic_types::{QubicId, Signature};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComputorInfos {
     pub epoch: u16,
     pub ids: Vec<QubicId>,
-    pub signature: Signature
+    pub signature: Signature,
 }
 
 impl From<Computors> for ComputorInfos {
@@ -14,7 +14,7 @@ impl From<Computors> for ComputorInfos {
         ComputorInfos {
             epoch: value.epoch,
             ids: value.public_key.to_vec(),
-            signature: value.signature
+            signature: value.signature,
         }
     }
 }

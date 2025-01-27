@@ -1,5 +1,3 @@
-
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum QubicLogType {
@@ -13,7 +11,7 @@ pub enum QubicLogType {
     ContractDebugMessage = 7,
     CustomMessage = 255,
     #[default]
-    None = 254
+    None = 254,
 }
 
 impl QubicLogType {
@@ -24,7 +22,7 @@ impl QubicLogType {
             Self::AssetOwnershipChange => Some(119),
             Self::AssetPossessionChange => Some(119),
             Self::ContractErrorMessage => Some(4),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -32,21 +30,20 @@ impl QubicLogType {
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct RequestLog {
-    pub passcode: [u64; 4]
+    pub passcode: [u64; 4],
 }
 
 set_message_type!(RequestLog, MessageType::RequestLog);
 
 pub struct RespondLog {
-    pub log_bytes: Vec<u8>
+    pub log_bytes: Vec<u8>,
 }
 
 use core::fmt::{Debug, Display};
 
-use qubic_types::{errors::ByteEncodingError, traits::FromBytes, QubicId};
+use crate::qubic_types::{errors::ByteEncodingError, traits::FromBytes, QubicId};
 
-use crate::{types::assets::AssetName, MessageType};
-
+use crate::qubic_tcp_types::{types::assets::AssetName, MessageType};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -62,7 +59,7 @@ pub struct LogHeader {
     pub epoch: u8,
     pub tick: u32,
     pub size: [u8; 3],
-    pub log_type: QubicLogType
+    pub log_type: QubicLogType,
 }
 
 impl LogHeader {
@@ -73,13 +70,35 @@ impl LogHeader {
 
 impl Debug for LogHeader {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("[{}/{:0>2}/{:0>2} {:0>2}:{:0>2}:{:0>2} EP{}@{} {:?}]", 2000 + self.year as u16, self.month, self.day, self.hour, self.minute, self.second, self.epoch, self.tick, self.log_type))
+        f.write_fmt(format_args!(
+            "[{}/{:0>2}/{:0>2} {:0>2}:{:0>2}:{:0>2} EP{}@{} {:?}]",
+            2000 + self.year as u16,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
+            self.epoch,
+            self.tick,
+            self.log_type
+        ))
     }
 }
 
 impl Display for LogHeader {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("[{}/{:0>2}/{:0>2} {:0>2}:{:0>2}:{:0>2} EP{}@{} {:?}]", 2000 + self.year as u16, self.month, self.day, self.hour, self.minute, self.second, self.epoch, self.tick, self.log_type))
+        f.write_fmt(format_args!(
+            "[{}/{:0>2}/{:0>2} {:0>2}:{:0>2}:{:0>2} EP{}@{} {:?}]",
+            2000 + self.year as u16,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
+            self.epoch,
+            self.tick,
+            self.log_type
+        ))
     }
 }
 
@@ -89,28 +108,37 @@ pub struct QuTransferLog {
     pub from: QubicId,
     pub to: QubicId,
     pub amount: u64,
-    pub transfer_id: Option<u64>
+    pub transfer_id: Option<u64>,
 }
 
 impl FromBytes for QuTransferLog {
     fn from_bytes(data: &[u8]) -> Result<Self, ByteEncodingError> {
         if data.len() < 72 {
-            return Err(ByteEncodingError::InvalidMinimumDataLength { expected_min: 72, found: data.len() })
+            return Err(ByteEncodingError::InvalidMinimumDataLength {
+                expected_min: 72,
+                found: data.len(),
+            });
         }
-
 
         Ok(Self {
             from: QubicId::from_bytes(&data[..32])?,
             to: QubicId::from_bytes(&data[32..64])?,
             amount: u64::from_bytes(&data[64..72])?,
-            transfer_id: if data.len() == 72 { None } else { Some(u64::from_bytes(&data[72..80])?) }
+            transfer_id: if data.len() == 72 {
+                None
+            } else {
+                Some(u64::from_bytes(&data[72..80])?)
+            },
         })
     }
 }
 
 impl Display for QuTransferLog {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("Transfer {} -> {} | Amount: {} QUs | Transfer ID: {:?}", self.from, self.to, self.amount, self.transfer_id))
+        f.write_fmt(format_args!(
+            "Transfer {} -> {} | Amount: {} QUs | Transfer ID: {:?}",
+            self.from, self.to, self.amount, self.transfer_id
+        ))
     }
 }
 
@@ -126,7 +154,12 @@ pub struct AssetIssuanceLog {
 
 impl Display for AssetIssuanceLog {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("New Asset {} issued by {} | Shares: {}", self.from, self.name.to_string(), self.number_of_shares as f32 / self.number_of_decimal_places as f32))
+        f.write_fmt(format_args!(
+            "New Asset {} issued by {} | Shares: {}",
+            self.from,
+            self.name.to_string(),
+            self.number_of_shares as f32 / self.number_of_decimal_places as f32
+        ))
     }
 }
 
@@ -154,7 +187,6 @@ pub struct AssetPossessionChangeLog {
     pub unit_of_measurement: [u8; 7],
 }
 
-
 #[derive(Debug, Clone, Default)]
 pub enum LogMessages {
     QuTransferLog(QuTransferLog),
@@ -163,7 +195,7 @@ pub enum LogMessages {
     AssetPossessionChangeLog(AssetPossessionChangeLog),
     String(String),
     #[default]
-    None
+    None,
 }
 
 impl Display for LogMessages {
@@ -174,7 +206,7 @@ impl Display for LogMessages {
             Self::AssetOwnershipChangeLog(log) => f.write_fmt(format_args!("{log:?}")),
             Self::AssetPossessionChangeLog(log) => f.write_fmt(format_args!("{log:?}")),
             Self::String(log) => f.write_fmt(format_args!("{log}")),
-            Self::None => f.write_str("")
+            Self::None => f.write_str(""),
         }
     }
 }
@@ -182,7 +214,7 @@ impl Display for LogMessages {
 #[derive(Debug, Clone, Default)]
 pub struct QubicLog {
     pub header: LogHeader,
-    pub message: LogMessages
+    pub message: LogMessages,
 }
 
 impl Display for QubicLog {
@@ -192,9 +224,9 @@ impl Display for QubicLog {
 }
 
 impl FromBytes for QubicLog {
-    fn from_bytes(data: &[u8]) -> Result<Self, qubic_types::errors::ByteEncodingError> {
+    fn from_bytes(data: &[u8]) -> Result<Self, crate::qubic_types::errors::ByteEncodingError> {
         if data.len() == 0 {
-            return Ok(Self::default())
+            return Ok(Self::default());
         }
 
         let header = LogHeader::from_bytes(&data[..core::mem::size_of::<LogHeader>()])?;
@@ -202,34 +234,32 @@ impl FromBytes for QubicLog {
         dbg!(header.get_size());
         dbg!(header.log_type);
 
-        let cut_data = &data[core::mem::size_of::<LogHeader>()..header.get_size() + core::mem::size_of::<LogHeader>()];
+        let cut_data = &data[core::mem::size_of::<LogHeader>()
+            ..header.get_size() + core::mem::size_of::<LogHeader>()];
         let message = match header.log_type {
             QubicLogType::QuTransfer => {
                 let log = QuTransferLog::from_bytes(&cut_data)?;
 
                 LogMessages::QuTransferLog(log)
-            },
+            }
             QubicLogType::AssetIssuance => {
                 let log = AssetIssuanceLog::from_bytes(&cut_data)?;
 
                 LogMessages::AssetIssuanceLog(log)
-            },
+            }
             QubicLogType::AssetOwnershipChange => {
                 let log = AssetOwnershipChangeLog::from_bytes(&cut_data)?;
 
                 LogMessages::AssetOwnershipChangeLog(log)
-            },
+            }
             QubicLogType::AssetPossessionChange => {
                 let log = AssetPossessionChangeLog::from_bytes(&cut_data)?;
 
                 LogMessages::AssetPossessionChangeLog(log)
             }
-            _ => LogMessages::String(String::new())
+            _ => LogMessages::String(String::new()),
         };
 
-        Ok(Self {
-            header,
-            message
-        })
+        Ok(Self { header, message })
     }
 }

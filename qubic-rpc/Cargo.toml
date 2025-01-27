@@ -6,18 +6,22 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-qubic-types = { path = "../qubic-types" }
-qubic-web3-rs = { path = "../qubic-web3-rs", features = ["async"] }
+qubic-rs = { path = "../qubic-rs", default-features = false, features = ["serde", "async"]}
 axum = "0.7"
 tokio = { version = "*", features = ["full"] }
 serde = { version = "*", features = ["derive"] }
 hex = "*"
 log = "*"
 env_logger = "*"
-qubic-rpc-types = { path="../qubic-rpc-types" }
 tower-http = { version = "0.5", features = ["cors"]}
 clap = { version = "4.4.7", features = ["derive"]}
 crossbeam-channel = "*"
 
 [dev-dependencies]
 reqwest = { version= "*", features = ["rustls", "json"]}
+serde_json = "*"
+
+[features]
+default = ["serde", "qubic-rs/std"]
+serde = ["qubic-rs/serde"]
+wasm = ["qubic-rs/wasm"]

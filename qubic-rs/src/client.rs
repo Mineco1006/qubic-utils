@@ -1,24 +1,56 @@
-use std::{hash::Hash, marker::PhantomData, ptr::{copy_nonoverlapping, read_unaligned}, str::FromStr, time::Duration};
+use std::{
+    hash::Hash,
+    marker::PhantomData,
+    ptr::{copy_nonoverlapping, read_unaligned},
+    str::FromStr,
+    time::Duration,
+};
 
 #[cfg(not(any(feature = "async", feature = "http")))]
-use std::{thread::JoinHandle, io::{Write, Read}};
+use std::{
+    io::{Read, Write},
+    thread::JoinHandle,
+};
 
+use crate::qubic_tcp_types::prelude::*;
+use crate::qubic_tcp_types::{
+    events::NetworkEvent,
+    types::{
+        assets::{
+            AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset,
+            RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset,
+            TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE,
+        },
+        contracts::RequestContractFunction,
+        qlogging::{QubicLog, RequestLog},
+        send_to_many::{
+            SendToManyFeeOutput, SendToManyInput, SendToManyTransaction,
+            SEND_TO_MANY_CONTRACT_INDEX,
+        },
+        special_commands::{GetMiningScoreRanking, MiningScoreRanking, SpecialCommand},
+        BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet,
+        RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity,
+        SystemInfo,
+    },
+    Header, MessageType,
+};
+use crate::qubic_types::{
+    traits::{FromBytes, Sign, ToBytes},
+    QubicId, QubicTxHash, QubicWallet, Signature,
+};
 use crate::transport::Transport;
-use qubic_tcp_types::{events::NetworkEvent, types::{assets::{AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE}, contracts::RequestContractFunction, qlogging::{QubicLog, RequestLog}, send_to_many::{SendToManyFeeOutput, SendToManyInput, SendToManyTransaction, SEND_TO_MANY_CONTRACT_INDEX}, special_commands::{GetMiningScoreRanking, MiningScoreRanking, SpecialCommand}, BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet, RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity, SystemInfo}, Header, MessageType};
-use qubic_tcp_types::prelude::*;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
-use qubic_types::{traits::{FromBytes, Sign, ToBytes}, QubicId, QubicTxHash, QubicWallet, Signature};
 use rand::Rng;
 
 #[cfg(any(feature = "async", feature = "http"))]
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Clone)]
 pub struct ClientBuilder<T: Transport> {
     pd: PhantomData<T>,
     url: String,
-    timeout: Option<std::time::Duration>
+    timeout: Option<std::time::Duration>,
 }
 
 impl<T: Transport> ClientBuilder<T> {
@@ -26,7 +58,7 @@ impl<T: Transport> ClientBuilder<T> {
         Self {
             pd: PhantomData,
             url: url.to_string(),
-            timeout: None
+            timeout: None,
         }
     }
 
@@ -38,73 +70,74 @@ impl<T: Transport> ClientBuilder<T> {
     }
     #[cfg(not(any(feature = "async", feature = "http")))]
     pub fn build(self) -> Result<Client<T>, T::Err> {
-        Ok(
-            Client {
-                transport: T::new(self.url, self.timeout)?
-            }
-        )
+        Ok(Client {
+            transport: T::new(self.url, self.timeout)?,
+        })
     }
 
     #[cfg(any(feature = "async", feature = "http"))]
     pub async fn build(self) -> Result<Client<T>, T::Err> {
-        Ok(
-            Client {
-                transport: T::new(self.url, self.timeout).await?
-            }
-        )
+        Ok(Client {
+            transport: T::new(self.url, self.timeout).await?,
+        })
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct Client<T: Transport> {
-    transport: Box<T>
+    transport: Box<T>,
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
-impl<T> Client<T> where T: Transport {
+impl<T> Client<T>
+where
+    T: Transport,
+{
     pub fn new(url: impl ToString) -> Result<Self, T::Err> {
         Ok(Self {
-            transport: T::new(url.to_string(), None)?
+            transport: T::new(url.to_string(), None)?,
         })
     }
 
     pub fn qu(&self) -> Qu<T> {
         Qu {
-            transport: &self.transport
+            transport: &self.transport,
         }
     }
 
     pub fn qx(&self) -> Qx<T> {
         Qx {
-            transport: &self.transport
+            transport: &self.transport,
         }
     }
 }
 
 #[cfg(any(feature = "async", feature = "http"))]
-impl<T> Client<T> where T: Transport {
+impl<T> Client<T>
+where
+    T: Transport,
+{
     pub async fn new(url: impl ToString) -> Result<Self, T::Err> {
         Ok(Self {
-            transport: T::new(url.to_string(), None).await?
+            transport: T::new(url.to_string(), None).await?,
         })
     }
 
     pub fn qu(&self) -> Qu<T> {
         Qu {
-            transport: &self.transport
+            transport: &self.transport,
         }
     }
 
     pub fn qx(&self) -> Qx<T> {
         Qx {
-            transport: &self.transport
+            transport: &self.transport,
         }
     }
 }
 
 pub struct Qu<'a, T: Transport> {
-    transport: &'a T
+    transport: &'a T,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -112,26 +145,38 @@ pub struct Qu<'a, T: Transport> {
 pub enum TransactionStatus {
     Failed,
     Included,
-    Executed
+    Executed,
 }
 
 pub const NUMBER_OF_EXCHANGES_PEERS: usize = 4;
 
 #[cfg(not(any(feature = "async", feature = "http")))]
-impl<'a, T> Qu<'a, T> where T: Transport {
-    pub fn send_raw_transaction<Tx: Into<TransactionWithData>>(&self, wallet: &QubicWallet, raw_transaction: Tx) -> Result<QubicTxHash> {
+impl<'a, T> Qu<'a, T>
+where
+    T: Transport,
+{
+    pub fn send_raw_transaction<Tx: Into<TransactionWithData>>(
+        &self,
+        wallet: &QubicWallet,
+        raw_transaction: Tx,
+    ) -> Result<QubicTxHash> {
         let mut txwd: TransactionWithData = raw_transaction.into();
         txwd.sign(wallet)?;
         let hash = txwd.clone().into();
 
-        self.transport.send_without_response(Packet::new(txwd, false))?;
+        self.transport
+            .send_without_response(Packet::new(txwd, false))?;
         Ok(hash)
     }
 
-    pub fn send_signed_transaction<Tx: Into<TransactionWithData>>(&self, transaction: Tx) -> Result<QubicTxHash> {
+    pub fn send_signed_transaction<Tx: Into<TransactionWithData>>(
+        &self,
+        transaction: Tx,
+    ) -> Result<QubicTxHash> {
         let txwd: TransactionWithData = transaction.into();
         let hash: QubicTxHash = txwd.clone().into();
-        self.transport.send_without_response(Packet::new(txwd, false))?;
+        self.transport
+            .send_without_response(Packet::new(txwd, false))?;
         Ok(hash)
     }
 
@@ -147,9 +192,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         if solution.public_key == wallet.public_key {
             if let Ok(shared_key) = wallet.get_shared_key() {
                 for i in 0..4 {
-                    shared_key_and_gamming_nonce[i] = u64::from_le_bytes(
-                        shared_key[i*8..(i+1)*8].try_into().unwrap()
-                    );
+                    shared_key_and_gamming_nonce[i] =
+                        u64::from_le_bytes(shared_key[i * 8..(i + 1) * 8].try_into().unwrap());
                 }
             }
         }
@@ -157,11 +201,26 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         loop {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
-                copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
-                let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().into_iter().flatten().collect::<Vec<_>>(), &[]);
+                copy_nonoverlapping(
+                    message.gamming_nonce.0.as_ptr(),
+                    shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8,
+                    32,
+                );
+                let mut kg = KangarooTwelve::hash(
+                    &shared_key_and_gamming_nonce
+                        .iter()
+                        .map(|i| i.to_le_bytes())
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>(),
+                    &[],
+                );
                 let mut gk = [0; 32];
                 kg.squeeze(&mut gk);
-                gamming_key = std::array::from_fn(|i| u64::from_le_bytes(gk[i*8..i*8 + 8].try_into().unwrap()));
+                gamming_key = std::array::from_fn(|i| {
+                    u64::from_le_bytes(gk[i * 8..i * 8 + 8].try_into().unwrap())
+                });
             }
 
             if gamming_key[0] & 0xFF == 0 {
@@ -169,7 +228,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             }
         }
 
-        let gamming_key: [u8; 32] = gamming_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
+        let gamming_key: [u8; 32] = gamming_key
+            .into_iter()
+            .flat_map(u64::to_le_bytes)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
         let mut gamma = [0; 64];
 
         let mut kg = KangarooTwelve::hash(&gamming_key, &[]);
@@ -181,17 +245,19 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         }
 
         let mut digest = [0u8; 32];
-        let message_size = std::mem::size_of::<BroadcastMessage>() - std::mem::size_of::<Signature>();
+        let message_size =
+            std::mem::size_of::<BroadcastMessage>() - std::mem::size_of::<Signature>();
         let message_ptr = &message as *const BroadcastMessage as *const u8;
         let mut kg = KangarooTwelve::hash(
             unsafe { std::slice::from_raw_parts(message_ptr, message_size) },
-            &[]
+            &[],
         );
         kg.squeeze(&mut digest);
 
         message.signature = wallet.sign_raw(digest);
 
-        self.transport.send_without_response(Packet::new(message, false))?;
+        self.transport
+            .send_without_response(Packet::new(message, false))?;
         Ok(())
     }
 
@@ -203,31 +269,31 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
     pub fn request_computors(&self) -> Result<Computors> {
         let packet = Packet::new(RequestComputors, true);
-        
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
     pub fn request_entity(&self, public_key: QubicId) -> Result<RespondedEntity> {
         let packet = Packet::new(RequestEntity { public_key }, true);
-        
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
     pub fn request_contract_ipo(&self, contract_index: u32) -> Result<ContractIpo> {
         let packet = Packet::new(RequestContractIpo { contract_index }, true);
-        
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
     pub fn request_tick_data(&self, tick: u32) -> Result<TickData> {
         let packet = Packet::new(RequestTickData { tick }, true);
-    
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
     pub fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<Tick> {
         let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
-        
+
         Ok(self.transport.send_with_response(packet)?)
     }
 
@@ -243,17 +309,32 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(self.transport.send_with_response(packet)?)
     }
 
-    pub fn request_tick_transactions(&self, tick: u32, flags: TransactionFlags) -> Result<Vec<TransactionWithData>> {
+    pub fn request_tick_transactions(
+        &self,
+        tick: u32,
+        flags: TransactionFlags,
+    ) -> Result<Vec<TransactionWithData>> {
         let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
 
         Ok(self.transport.send_with_multiple_responses(packet)?)
     }
 
-    pub fn check_transaction_status(&self, tx_hash: QubicTxHash, tick: u32) -> Result<TransactionStatus> {
+    pub fn check_transaction_status(
+        &self,
+        tx_hash: QubicTxHash,
+        tick: u32,
+    ) -> Result<TransactionStatus> {
         let mut status = TransactionStatus::Failed;
 
-        let tt_packet = Packet::new(RequestedTickTransactions { tick, flags: TransactionFlags::all() }, true);
-        let tt: Vec<TransactionWithData> = self.transport.send_with_multiple_responses(tt_packet)?;
+        let tt_packet = Packet::new(
+            RequestedTickTransactions {
+                tick,
+                flags: TransactionFlags::all(),
+            },
+            true,
+        );
+        let tt: Vec<TransactionWithData> =
+            self.transport.send_with_multiple_responses(tt_packet)?;
 
         for tx in tt {
             let digest: QubicTxHash = tx.into();
@@ -271,72 +352,101 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                 break;
             }
         }
-        
+
         Ok(status)
     }
 
-    pub fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()> 
-        where F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static
+    pub fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()>
+    where
+        F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static,
     {
         let url = self.transport.get_url();
-        let _: JoinHandle<Result<()>> = std::thread::Builder::new().name("qubic-event-handler".to_string()).stack_size(10_000_000).spawn(move || {
-            let event_handler = event_handler;
-            let url = url;
-            if let Ok(transport) = T::new(url.clone(), None) {
-                let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
-                let mut data_buffer = vec![0u8; 10_000_000];
+        let _: JoinHandle<Result<()>> = std::thread::Builder::new()
+            .name("qubic-event-handler".to_string())
+            .stack_size(10_000_000)
+            .spawn(move || {
+                let event_handler = event_handler;
+                let url = url;
+                if let Ok(transport) = T::new(url.clone(), None) {
+                    let mut header_buffer = vec![0u8; std::mem::size_of::<Header>()];
+                    let mut data_buffer = vec![0u8; 10_000_000];
 
-                'connection: loop {
-                    let mut stream = transport.connect()?;
-                    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-                    stream.write_all(&Packet::new(public_peers, true).to_bytes())?;
-                    loop {
-                        match stream.read_exact(&mut header_buffer) {
-                            Err(_) => continue 'connection,
-                            _ => ()
-                        };
+                    'connection: loop {
+                        let mut stream = transport.connect()?;
+                        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+                        stream.write_all(&Packet::new(public_peers, true).to_bytes())?;
+                        loop {
+                            match stream.read_exact(&mut header_buffer) {
+                                Err(_) => continue 'connection,
+                                _ => (),
+                            };
 
-                        let header = unsafe {
-                            read_unaligned(header_buffer.as_ptr() as *const Header)
-                        };
+                            let header =
+                                unsafe { read_unaligned(header_buffer.as_ptr() as *const Header) };
 
-                        match stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())]) {
-                            Err(_) => continue 'connection,
-                            _ => ()
-                        };
+                            match stream.read_exact(
+                                &mut data_buffer
+                                    [0..(header.get_size() - std::mem::size_of::<Header>())],
+                            ) {
+                                Err(_) => continue 'connection,
+                                _ => (),
+                            };
 
-                        match header.message_type {
-                            MessageType::ExchangePublicPeers => {
-                                event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
-                            },
-                            MessageType::BroadcastMessage => {
-                                
-                                event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
-                            },
-                            MessageType::BroadcastTransaction => {
-                                let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()])?;
+                            match header.message_type {
+                                MessageType::ExchangePublicPeers => {
+                                    event_handler(NetworkEvent::ExchangePublicPeers(unsafe {
+                                        read_unaligned(
+                                            data_buffer.as_ptr() as *const ExchangePublicPeers
+                                        )
+                                    }))?;
+                                }
+                                MessageType::BroadcastMessage => {
+                                    event_handler(NetworkEvent::BroadcastMessage(unsafe {
+                                        read_unaligned(
+                                            data_buffer.as_ptr() as *const BroadcastMessage
+                                        )
+                                    }))?;
+                                }
+                                MessageType::BroadcastTransaction => {
+                                    let tx = TransactionWithData::from_bytes(
+                                        &data_buffer
+                                            [..header.get_size() - std::mem::size_of::<Header>()],
+                                    )?;
 
-                                event_handler(NetworkEvent::BroadcastTransaction(tx))?;
-                            },
-                            MessageType::BroadcastTick => {
-                                event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;
-                            },
-                            MessageType::BroadcastFutureTickData => {
-                                event_handler(NetworkEvent::BroadcastFutureTick(Box::new(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) })))?;
+                                    event_handler(NetworkEvent::BroadcastTransaction(tx))?;
+                                }
+                                MessageType::BroadcastTick => {
+                                    event_handler(NetworkEvent::BroadcastTick(unsafe {
+                                        read_unaligned(data_buffer.as_ptr() as *const Tick)
+                                    }))?;
+                                }
+                                MessageType::BroadcastFutureTickData => {
+                                    event_handler(NetworkEvent::BroadcastFutureTick(Box::new(
+                                        unsafe {
+                                            read_unaligned(data_buffer.as_ptr() as *const TickData)
+                                        },
+                                    )))?;
+                                }
+                                _ => (),
                             }
-                            _ => ()
                         }
                     }
                 }
-            }
-            
-            Ok(())
-        })?;
-        
+
+                Ok(())
+            })?;
+
         Ok(())
     }
 
-    pub fn make_ipo_bid(&self, wallet: &QubicWallet, contract_index: u32, price_per_share: u64, number_of_shares: u16, tick: u32) -> Result<QubicTxHash> {
+    pub fn make_ipo_bid(
+        &self,
+        wallet: &QubicWallet,
+        contract_index: u32,
+        price_per_share: u64,
+        number_of_shares: u16,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let mut dst = QubicId::default();
 
         dst.0[0..4].copy_from_slice(&contract_index.to_le_bytes());
@@ -348,17 +458,17 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                 amount: 0,
                 tick,
                 input_type: 0,
-                input_size: std::mem::size_of::<ContractIpoBid>() as u16
+                input_size: std::mem::size_of::<ContractIpoBid>() as u16,
             },
             input: ContractIpoBid {
                 price: price_per_share,
-                quantity: number_of_shares
-            }
+                quantity: number_of_shares,
+            },
         };
 
         let call = Call {
             raw_call,
-            signature: wallet.sign(raw_call)
+            signature: wallet.sign(raw_call),
         };
 
         let packet = Packet::new(call, false);
@@ -374,17 +484,25 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     }
 
     pub fn get_send_to_many_fees(&self) -> Result<SendToManyFeeOutput> {
-        let packet = Packet::new(RequestContractFunction {
-            contract_index: SEND_TO_MANY_CONTRACT_INDEX,
-            input_type: 1,
-            input_size: 0
-        }, true);
+        let packet = Packet::new(
+            RequestContractFunction {
+                contract_index: SEND_TO_MANY_CONTRACT_INDEX,
+                input_type: 1,
+                input_size: 0,
+            },
+            true,
+        );
 
         Ok(self.transport.send_with_response(packet)?)
     }
 
     /// panics if txns.len() > 25
-    pub fn send_to_many(&self, wallet: &QubicWallet, txns: &[SendToManyTransaction], tick: u32) -> Result<QubicTxHash> {
+    pub fn send_to_many(
+        &self,
+        wallet: &QubicWallet,
+        txns: &[SendToManyTransaction],
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let mut input = SendToManyInput::default();
         for (idx, tx) in txns.into_iter().enumerate() {
             input.ids[idx] = tx.id;
@@ -394,12 +512,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let fee = self.get_send_to_many_fees()?;
 
         let tx = TransactionBuilder::new()
-                                        .with_amount(fee.fee as u64)
-                                        .with_signing_wallet(wallet)
-                                        .with_tick(tick)
-                                        .with_tx_data(TransactionData::SendToMany(input))
-                                        .build();
-        
+            .with_amount(fee.fee as u64)
+            .with_signing_wallet(wallet)
+            .with_tick(tick)
+            .with_tx_data(TransactionData::SendToMany(input))
+            .build();
+
         let hash = QubicTxHash::from(tx.clone());
 
         let packet = Packet::new(tx, false);
@@ -408,15 +526,18 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         Ok(hash)
     }
 
-    pub fn special_command_get_mining_ranking(&self, operator: &QubicWallet) -> Result<MiningScoreRanking> {
+    pub fn special_command_get_mining_ranking(
+        &self,
+        operator: &QubicWallet,
+    ) -> Result<MiningScoreRanking> {
         let packet = Packet::new(SpecialCommand::new(GetMiningScoreRanking, operator), true);
-        
+
         Ok(self.transport.send_with_response(packet)?)
     }
 }
 
 pub struct Qx<'a, T: Transport> {
-    transport: &'a T
+    transport: &'a T,
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -439,14 +560,21 @@ impl<'a, T: Transport> Qx<'a, T> {
         Ok(self.transport.send_with_multiple_responses(packet)?)
     }
 
-    pub fn transfer_qx_share(&self, wallet: &QubicWallet, possessor: QubicId, to: QubicId, units: i64, tick: u32) -> Result<QubicTxHash> {
+    pub fn transfer_qx_share(
+        &self,
+        wallet: &QubicWallet,
+        possessor: QubicId,
+        to: QubicId,
+        units: i64,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: TRANSFER_FEE,
             tick,
             input_type: 2,
-            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
+            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16,
         };
 
         let mut call = Call {
@@ -457,10 +585,10 @@ impl<'a, T: Transport> Qx<'a, T> {
                     issuer: QubicId::default(),
                     new_owner: to,
                     asset_name: AssetName::from_str("QX")?,
-                    number_of_units: units
-                }
+                    number_of_units: units,
+                },
             },
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         call.signature = wallet.sign(call.raw_call);
@@ -472,14 +600,22 @@ impl<'a, T: Transport> Qx<'a, T> {
         Ok(call.into())
     }
 
-    pub fn issue_asset(&self, wallet: &QubicWallet, name: &str, unit_of_measurement: [u8; 7], number_of_units: i64, number_of_decimal_places: i8, tick: u32) -> Result<QubicTxHash> {
+    pub fn issue_asset(
+        &self,
+        wallet: &QubicWallet,
+        name: &str,
+        unit_of_measurement: [u8; 7],
+        number_of_units: i64,
+        number_of_decimal_places: i8,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: ISSUE_ASSET_FEE,
             tick,
             input_type: 1,
-            input_size: std::mem::size_of::<IssueAssetInput>() as u16
+            input_size: std::mem::size_of::<IssueAssetInput>() as u16,
         };
 
         let mut padded_uom = [0; 8];
@@ -493,10 +629,10 @@ impl<'a, T: Transport> Qx<'a, T> {
                     name: AssetName::from_str(name)?,
                     number_of_units,
                     unit_of_measurement: u64::from_le_bytes(padded_uom),
-                    number_of_decimal_places
-                }
+                    number_of_decimal_places,
+                },
             },
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         call.signature = wallet.sign(call.raw_call);
@@ -507,14 +643,23 @@ impl<'a, T: Transport> Qx<'a, T> {
         Ok(call.into())
     }
 
-    pub fn transfer_asset(&self, wallet: &QubicWallet, possessor: QubicId, issuer: QubicId, to: QubicId, name: &str, units: i64, tick: u32) -> Result<QubicTxHash> {
+    pub fn transfer_asset(
+        &self,
+        wallet: &QubicWallet,
+        possessor: QubicId,
+        issuer: QubicId,
+        to: QubicId,
+        name: &str,
+        units: i64,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: 1_000_000,
             tick,
             input_type: 2,
-            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
+            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16,
         };
 
         let mut call = Call {
@@ -525,10 +670,10 @@ impl<'a, T: Transport> Qx<'a, T> {
                     issuer,
                     new_owner: to,
                     asset_name: AssetName::from_str(name)?,
-                    number_of_units: units
-                }
+                    number_of_units: units,
+                },
             },
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         call.signature = wallet.sign(call.raw_call);
@@ -541,20 +686,30 @@ impl<'a, T: Transport> Qx<'a, T> {
 }
 
 #[cfg(any(feature = "async", feature = "http"))]
-impl<'a, T> Qu<'a, T> where T: Transport {
-    pub async fn send_raw_transaction(&self, wallet: &QubicWallet, raw_transaction: RawTransaction) -> Result<()> {
-        
+impl<'a, T> Qu<'a, T>
+where
+    T: Transport,
+{
+    pub async fn send_raw_transaction(
+        &self,
+        wallet: &QubicWallet,
+        raw_transaction: RawTransaction,
+    ) -> Result<()> {
         let transaction = Transaction {
             raw_transaction,
-            signature: wallet.sign(raw_transaction)
+            signature: wallet.sign(raw_transaction),
         };
 
-        self.transport.send_without_response(Packet::new(transaction, false)).await?;
+        self.transport
+            .send_without_response(Packet::new(transaction, false))
+            .await?;
         Ok(())
     }
 
     pub async fn send_signed_transaction(&self, transaction: Transaction) -> Result<()> {
-        self.transport.send_without_response(Packet::new(transaction, false)).await?;
+        self.transport
+            .send_without_response(Packet::new(transaction, false))
+            .await?;
         Ok(())
     }
 
@@ -570,9 +725,8 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         if solution.public_key == wallet.public_key {
             if let Ok(shared_key) = wallet.get_shared_key() {
                 for i in 0..4 {
-                    shared_key_and_gamming_nonce[i] = u64::from_le_bytes(
-                        shared_key[i*8..(i+1)*8].try_into().unwrap()
-                    );
+                    shared_key_and_gamming_nonce[i] =
+                        u64::from_le_bytes(shared_key[i * 8..(i + 1) * 8].try_into().unwrap());
                 }
             }
         }
@@ -580,11 +734,26 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         loop {
             unsafe {
                 message.gamming_nonce.0 = rng.gen();
-                copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
-                let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().into_iter().flatten().collect::<Vec<_>>(), &[]);
+                copy_nonoverlapping(
+                    message.gamming_nonce.0.as_ptr(),
+                    shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8,
+                    32,
+                );
+                let mut kg = KangarooTwelve::hash(
+                    &shared_key_and_gamming_nonce
+                        .iter()
+                        .map(|i| i.to_le_bytes())
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>(),
+                    &[],
+                );
                 let mut gk = [0; 32];
                 kg.squeeze(&mut gk);
-                gamming_key = std::array::from_fn(|i| u64::from_le_bytes(gk[i*8..i*8 + 8].try_into().unwrap()));
+                gamming_key = std::array::from_fn(|i| {
+                    u64::from_le_bytes(gk[i * 8..i * 8 + 8].try_into().unwrap())
+                });
             }
 
             if gamming_key[0] & 0xFF == 0 {
@@ -592,7 +761,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
             }
         }
 
-        let gamming_key: [u8; 32] = gamming_key.into_iter().flat_map(u64::to_le_bytes).collect::<Vec<_>>().try_into().unwrap();
+        let gamming_key: [u8; 32] = gamming_key
+            .into_iter()
+            .flat_map(u64::to_le_bytes)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
         let mut gamma = [0; 64];
 
         let mut kg = KangarooTwelve::hash(&gamming_key, &[]);
@@ -604,17 +778,20 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         }
 
         let mut digest = [0u8; 32];
-        let message_size = std::mem::size_of::<BroadcastMessage>() - std::mem::size_of::<Signature>();
+        let message_size =
+            std::mem::size_of::<BroadcastMessage>() - std::mem::size_of::<Signature>();
         let message_ptr = &message as *const BroadcastMessage as *const u8;
         let mut kg = KangarooTwelve::hash(
             unsafe { std::slice::from_raw_parts(message_ptr, message_size) },
-            &[]
+            &[],
         );
         kg.squeeze(&mut digest);
 
         message.signature = wallet.sign_raw(digest);
 
-        self.transport.send_without_response(Packet::new(message, false)).await?;
+        self.transport
+            .send_without_response(Packet::new(message, false))
+            .await?;
         Ok(())
     }
 
@@ -626,49 +803,64 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
     pub async fn request_computors(&self) -> Result<Computors> {
         let packet = Packet::new(RequestComputors, true);
-        
-        
+
         self.transport.send_with_response(packet).await
     }
 
     pub async fn request_entity(&self, public_key: QubicId) -> Result<RespondedEntity> {
         let packet = Packet::new(RequestEntity { public_key }, true);
-        
+
         self.transport.send_with_response(packet).await
     }
 
     pub async fn request_contract_ipo(&self, contract_index: u32) -> Result<ContractIpo> {
         let packet = Packet::new(RequestContractIpo { contract_index }, true);
-        
+
         self.transport.send_with_response(packet).await
     }
 
     pub async fn request_tick_data(&self, tick: u32) -> Result<Tick> {
         let packet = Packet::new(RequestTickData { tick }, true);
-    
+
         self.transport.send_with_response(packet).await
     }
 
-    pub async fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<Tick> {
+    pub async fn request_quorum_tick(
+        &self,
+        tick: u32,
+        vote_flags: [u8; (676 + 7) / 8],
+    ) -> Result<Tick> {
         let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
-        
+
         self.transport.send_with_response(packet).await
     }
 
-    pub async fn exchange_public_peers(&self, peers: ExchangePublicPeers) -> Result<ExchangePublicPeers> {
+    pub async fn exchange_public_peers(
+        &self,
+        peers: ExchangePublicPeers,
+    ) -> Result<ExchangePublicPeers> {
         let packet = Packet::new(peers, true);
 
         self.transport.send_with_response(packet).await
     }
 
-    pub async fn request_tick_transactions(&self, tick: u32, flags: TransactionFlags) -> Result<Vec<TransactionWithData>> {
+    pub async fn request_tick_transactions(
+        &self,
+        tick: u32,
+        flags: TransactionFlags,
+    ) -> Result<Vec<TransactionWithData>> {
         let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
 
         self.transport.send_with_multiple_responses(packet).await
     }
 
-    pub async fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()> 
-        where F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static
+    pub async fn subscribe<F>(
+        &self,
+        public_peers: ExchangePublicPeers,
+        event_handler: F,
+    ) -> Result<()>
+    where
+        F: Fn(NetworkEvent) -> Result<()> + Send + Sync + 'static,
     {
         let url = self.transport.get_url().await;
 
@@ -685,47 +877,73 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
                 let mut stream = tokio::net::TcpStream::from_std(std_stream)?;
 
-                stream.write_all(&Packet::new(public_peers, true).to_bytes()).await?;
+                stream
+                    .write_all(&Packet::new(public_peers, true).to_bytes())
+                    .await?;
                 loop {
                     if stream.read_exact(&mut header_buffer).await.is_err() {
-                        continue 'connection
+                        continue 'connection;
                     }
 
                     let header = Header::from_bytes(&header_buffer).unwrap();
 
-                    if stream.read_exact(&mut data_buffer[0..(header.get_size() - std::mem::size_of::<Header>())]).await.is_err() {
-                        continue 'connection
+                    if stream
+                        .read_exact(
+                            &mut data_buffer
+                                [0..(header.get_size() - std::mem::size_of::<Header>())],
+                        )
+                        .await
+                        .is_err()
+                    {
+                        continue 'connection;
                     };
 
                     match header.message_type {
                         MessageType::ExchangePublicPeers => {
-                            event_handler(NetworkEvent::ExchangePublicPeers(unsafe { read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers) }))?;
-                        },
+                            event_handler(NetworkEvent::ExchangePublicPeers(unsafe {
+                                read_unaligned(data_buffer.as_ptr() as *const ExchangePublicPeers)
+                            }))?;
+                        }
                         MessageType::BroadcastMessage => {
-                            
-                            event_handler(NetworkEvent::BroadcastMessage(unsafe { read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage) }))?;
-                        },
+                            event_handler(NetworkEvent::BroadcastMessage(unsafe {
+                                read_unaligned(data_buffer.as_ptr() as *const BroadcastMessage)
+                            }))?;
+                        }
                         MessageType::BroadcastTransaction => {
-                            let tx = TransactionWithData::from_bytes(&data_buffer[..header.get_size() - std::mem::size_of::<Header>()]).unwrap();
+                            let tx = TransactionWithData::from_bytes(
+                                &data_buffer[..header.get_size() - std::mem::size_of::<Header>()],
+                            )
+                            .unwrap();
 
                             event_handler(NetworkEvent::BroadcastTransaction(tx))?;
-                        },
-                        MessageType::BroadcastTick => {
-                            event_handler(NetworkEvent::BroadcastTick(unsafe { read_unaligned(data_buffer.as_ptr() as *const Tick) }))?;
-                        },
-                        MessageType::BroadcastFutureTickData => {
-                            event_handler(NetworkEvent::BroadcastFutureTick(Box::new(unsafe { read_unaligned(data_buffer.as_ptr() as *const TickData) })))?;
                         }
-                        _ => ()
+                        MessageType::BroadcastTick => {
+                            event_handler(NetworkEvent::BroadcastTick(unsafe {
+                                read_unaligned(data_buffer.as_ptr() as *const Tick)
+                            }))?;
+                        }
+                        MessageType::BroadcastFutureTickData => {
+                            event_handler(NetworkEvent::BroadcastFutureTick(Box::new(unsafe {
+                                read_unaligned(data_buffer.as_ptr() as *const TickData)
+                            })))?;
+                        }
+                        _ => (),
                     }
                 }
             }
         });
-        
+
         Ok(())
     }
 
-    pub async fn make_ipo_bid(&self, wallet: &QubicWallet, contract_index: u32, price_per_share: u64, number_of_shares: u16, tick: u32) -> Result<QubicTxHash> {
+    pub async fn make_ipo_bid(
+        &self,
+        wallet: &QubicWallet,
+        contract_index: u32,
+        price_per_share: u64,
+        number_of_shares: u16,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let mut dst = QubicId::default();
 
         dst.0[0..4].copy_from_slice(&contract_index.to_le_bytes());
@@ -737,17 +955,17 @@ impl<'a, T> Qu<'a, T> where T: Transport {
                 amount: 0,
                 tick,
                 input_type: 0,
-                input_size: std::mem::size_of::<ContractIpoBid>() as u16
+                input_size: std::mem::size_of::<ContractIpoBid>() as u16,
             },
             input: ContractIpoBid {
                 price: price_per_share,
-                quantity: number_of_shares
-            }
+                quantity: number_of_shares,
+            },
         };
 
         let call = Call {
             raw_call,
-            signature: wallet.sign(raw_call)
+            signature: wallet.sign(raw_call),
         };
 
         let packet = Packet::new(call, false);
@@ -771,20 +989,30 @@ impl<'a, T: Transport> Qx<'a, T> {
         self.transport.send_with_multiple_responses(packet).await
     }
 
-    pub async fn request_possessed_assets(&self, id: QubicId) -> Result<Vec<RespondPossessedAsset>> {
+    pub async fn request_possessed_assets(
+        &self,
+        id: QubicId,
+    ) -> Result<Vec<RespondPossessedAsset>> {
         let packet = Packet::new(RequestPossessedAsset { public_key: id }, true);
 
         self.transport.send_with_multiple_responses(packet).await
     }
 
-    pub async fn transfer_qx_share(&self, wallet: &QubicWallet, possessor: QubicId, to: QubicId, units: i64, tick: u32) -> Result<QubicTxHash> {
+    pub async fn transfer_qx_share(
+        &self,
+        wallet: &QubicWallet,
+        possessor: QubicId,
+        to: QubicId,
+        units: i64,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: TRANSFER_FEE,
             tick,
             input_type: 2,
-            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
+            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16,
         };
 
         let mut call = Call {
@@ -795,10 +1023,10 @@ impl<'a, T: Transport> Qx<'a, T> {
                     issuer: QubicId::default(),
                     new_owner: to,
                     asset_name: AssetName::from_str("QX").unwrap(),
-                    number_of_units: units
-                }
+                    number_of_units: units,
+                },
             },
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         call.signature = wallet.sign(call.raw_call);
@@ -810,14 +1038,22 @@ impl<'a, T: Transport> Qx<'a, T> {
         Ok(call.into())
     }
 
-    pub async fn issue_asset(&self, wallet: &QubicWallet, name: &str, unit_of_measurement: [u8; 7], number_of_units: i64, number_of_decimal_places: i8, tick: u32) -> Result<QubicTxHash> {
+    pub async fn issue_asset(
+        &self,
+        wallet: &QubicWallet,
+        name: &str,
+        unit_of_measurement: [u8; 7],
+        number_of_units: i64,
+        number_of_decimal_places: i8,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: ISSUE_ASSET_FEE,
             tick,
             input_type: 1,
-            input_size: std::mem::size_of::<IssueAssetInput>() as u16
+            input_size: std::mem::size_of::<IssueAssetInput>() as u16,
         };
 
         let mut padded_uom = [0; 8];
@@ -831,10 +1067,10 @@ impl<'a, T: Transport> Qx<'a, T> {
                     name: AssetName::from_str(name).unwrap(),
                     number_of_units,
                     unit_of_measurement: u64::from_le_bytes(padded_uom),
-                    number_of_decimal_places
-                }
+                    number_of_decimal_places,
+                },
             },
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         call.signature = wallet.sign(call.raw_call);
@@ -845,14 +1081,23 @@ impl<'a, T: Transport> Qx<'a, T> {
         Ok(call.into())
     }
 
-    pub async fn transfer_asset(&self, wallet: &QubicWallet, possessor: QubicId, issuer: QubicId, to: QubicId, name: &str, units: i64, tick: u32) -> Result<QubicTxHash> {
+    pub async fn transfer_asset(
+        &self,
+        wallet: &QubicWallet,
+        possessor: QubicId,
+        issuer: QubicId,
+        to: QubicId,
+        name: &str,
+        units: i64,
+        tick: u32,
+    ) -> Result<QubicTxHash> {
         let tx = RawTransaction {
             from: wallet.public_key,
             to: QXID,
             amount: 1_000_000,
             tick,
             input_type: 2,
-            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16
+            input_size: std::mem::size_of::<TransferAssetOwnershipAndPossessionInput>() as u16,
         };
 
         let mut call = Call {
@@ -863,10 +1108,10 @@ impl<'a, T: Transport> Qx<'a, T> {
                     issuer,
                     new_owner: to,
                     asset_name: AssetName::from_str(name).unwrap(),
-                    number_of_units: units
-                }
+                    number_of_units: units,
+                },
             },
-            signature: Signature::default()
+            signature: Signature::default(),
         };
 
         call.signature = wallet.sign(call.raw_call);
