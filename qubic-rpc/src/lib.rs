@@ -6,67 +6,24 @@
 //! ```rust,no_run
 //! ```
 
-mod qubic_rpc_types;
-
-use axum::http::Method;
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{extract::State, Json};
 use clap::Parser;
+use qubic_rs::{
+    client::Client, qubic_tcp_types::types::transactions::TransactionFlags, transport::Tcp,
+};
+use std::sync::Arc;
 
 use crate::qubic_rpc_types::{
     QubicJsonRpcRequest, QubicJsonRpcResponse, RequestError, RequestMethods, RequestResults,
     ResponseType,
 };
 
-use qubic_rs::{
-    client::Client, qubic_tcp_types::types::transactions::TransactionFlags, transport::Tcp,
-};
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tower_http::cors::{Any, CorsLayer};
+pub mod qubic_rpc_types;
 
 #[macro_use]
 extern crate log;
 
-#[derive(Debug, Parser)]
-struct Args {
-    /// Binds server to provided port
-    #[arg(short, long, default_value = "2003")]
-    port: String,
-
-    /// Computor to send requests
-    #[arg(short, long, default_value = "95.156.230.174:21841")]
-    computor: String,
-}
-
-#[tokio::main]
-async fn main() {
-    env_logger::Builder::new()
-        .filter_level(log::LevelFilter::Info)
-        .init();
-
-    let args = Args::parse();
-
-    let cors = CorsLayer::new()
-        .allow_methods([Method::POST])
-        .allow_origin(Any)
-        .allow_headers(Any);
-
-    let state = Arc::new(args);
-
-    let app = Router::new()
-        .route("/", post(request_handler))
-        .with_state(state.clone())
-        .layer(cors);
-
-    info!("Binding server to port {}", state.port);
-    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", state.port))
-        .await
-        .unwrap();
-    axum::serve(tcp_listener, app.into_make_service())
-        .await
-        .unwrap();
-}
-
+#[macro_export]
 macro_rules! result_or_501 {
     ($handle: expr, $rpc_method: expr) => {
         match $handle {
@@ -85,6 +42,7 @@ macro_rules! result_or_501 {
     };
 }
 
+#[macro_export]
 macro_rules! early_return_result {
     ($res_type: expr, $rpc_method: expr) => {
         return Json(QubicJsonRpcResponse {
@@ -95,7 +53,18 @@ macro_rules! early_return_result {
     };
 }
 
-async fn request_handler(
+#[derive(Debug, Parser)]
+pub struct Args {
+    /// Binds server to provided port
+    #[arg(short, long, default_value = "2003")]
+    pub port: String,
+
+    /// Computor to send requests
+    #[arg(short, long, default_value = "95.156.230.174:21841")]
+    pub computor: String,
+}
+
+pub async fn request_handler(
     State(state): State<Arc<Args>>,
     Json(rpc_method): Json<QubicJsonRpcRequest>,
 ) -> Json<QubicJsonRpcResponse> {
@@ -148,63 +117,3 @@ async fn request_handler(
         }
     }
 }
-
-#[tokio::test]
-async fn test() {
-    use qubic_types::QubicId;
-    use std::str::FromStr;
-    const RPC: &str = "http://127.0.0.1:2003/";
-
-    let client = reqwest::Client::new();
-    let request = QubicJsonRpcRequest::new(
-        0,
-        RequestMethods::RequestEntity(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
-                .unwrap(),
-        ),
-    );
-    let res: QubicJsonRpcResponse = client
-        .post(RPC)
-        .json(&request)
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    dbg!(res);
-
-    let request = QubicJsonRpcRequest::new(0, RequestMethods::RequestCurrentTickInfo);
-    let res: QubicJsonRpcResponse = client
-        .post(RPC)
-        .json(&request)
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    dbg!(&res);
-
-    if let ResponseType::Result(r) = res.response {
-        if let RequestResults::RequestCurrentTickInfo(current_tick) = r {
-            let request = QubicJsonRpcRequest::new(
-                0,
-                RequestMethods::RequestTickTransactions(current_tick.tick - 10),
-            );
-            let res: QubicJsonRpcResponse = client
-                .post(RPC)
-                .json(&request)
-                .send()
-                .await
-                .unwrap()
-                .json()
-                .await
-                .unwrap();
-            dbg!(&res);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {} // TODO
