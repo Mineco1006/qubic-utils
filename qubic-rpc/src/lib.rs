@@ -53,19 +53,22 @@ macro_rules! early_return_result {
     };
 }
 
+// Make sure this is a valid computor IP address (changes every few weeks)
+pub const COMPUTOR_ADDRESS: &str = "188.241.26.108:21841";
+
 #[derive(Debug, Parser)]
-pub struct Args {
+pub struct RPCState {
     /// Binds server to provided port
     #[arg(short, long, default_value = "2003")]
     pub port: String,
 
     /// Computor to send requests
-    #[arg(short, long, default_value = "95.156.230.174:21841")]
+    #[arg(short, long, default_value = COMPUTOR_ADDRESS)]
     pub computor: String,
 }
 
 pub async fn request_handler(
-    State(state): State<Arc<Args>>,
+    State(state): State<Arc<RPCState>>,
     Json(rpc_method): Json<QubicJsonRpcRequest>,
 ) -> Json<QubicJsonRpcResponse> {
     info!("Incoming request: {rpc_method:?}");

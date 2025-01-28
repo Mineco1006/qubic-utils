@@ -1,17 +1,9 @@
 use axum::http::Method;
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{routing::post, Router};
 use clap::Parser;
 
-use qubic_rpc::{
-    early_return_result,
-    qubic_rpc_types::{
-        QubicJsonRpcRequest, QubicJsonRpcResponse, RequestError, RequestMethods, RequestResults,
-        ResponseType,
-    },
-    request_handler, result_or_501, Args,
-};
+use qubic_rpc::{request_handler, RPCState};
 
-use qubic_rs::{client::Client, transport::Tcp};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
@@ -25,14 +17,12 @@ async fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let args = Args::parse();
+    let state = Arc::new(RPCState::parse());
 
     let cors = CorsLayer::new()
         .allow_methods([Method::POST])
         .allow_origin(Any)
         .allow_headers(Any);
-
-    let state = Arc::new(args);
 
     let app = Router::new()
         .route("/", post(request_handler))
