@@ -8,6 +8,9 @@ use tokio::{
 use tower_http::cors::{Any, CorsLayer};
 
 extern crate qubic_rpc;
+use qubic_rpc::qubic_rpc_router_v2;
+
+const COMPUTOR_ADDRESS: &str = "45.152.160.28";
 
 pub async fn setup() -> (String, JoinHandle<()>) {
     // Generate a random port number between 2003 and 2999 (inclusive)
@@ -24,25 +27,10 @@ pub async fn setup() -> (String, JoinHandle<()>) {
 }
 
 pub async fn server(port: String) {
-    let state = Arc::new(qubic_rpc::RPCState {
-        port,
-        computor: qubic_rpc::COMPUTOR_ADDRESS.to_string(),
-    });
-
-    let cors = CorsLayer::new()
-        .allow_methods([Method::POST])
-        .allow_origin(Any)
-        .allow_headers(Any);
-
-    let app = Router::new()
-        .route("/", post(qubic_rpc::request_handler))
-        .with_state(state.clone())
-        .layer(cors);
-
-    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", state.port))
+    let app = qubic_rpc_router_v2(COMPUTOR_ADDRESS.to_string());
+    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", port))
         .await
         .unwrap();
-    axum::serve(tcp_listener, app.into_make_service())
-        .await
-        .unwrap();
+
+    axum::serve(tcp_listener, app).await.unwrap();
 }

@@ -1,15 +1,22 @@
-use axum::http::Method;
-use axum::{routing::post, Router};
 use clap::Parser;
-
-use qubic_rpc::{request_handler, RPCState};
-
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tower_http::cors::{Any, CorsLayer};
+
+use qubic_rpc::qubic_rpc_router_v2;
 
 #[macro_use]
 extern crate log;
+
+#[derive(Debug, Parser)]
+pub struct Args {
+    /// Binds server to provided port
+    #[arg(short, long, default_value = "2003")]
+    pub port: String,
+
+    /// Computor IP to which send requests
+    #[arg(short, long)]
+    pub computor: String,
+}
 
 #[tokio::main]
 async fn main() {
@@ -17,23 +24,14 @@ async fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let state = Arc::new(RPCState::parse());
+    let args = Arc::new(Args::parse());
 
-    let cors = CorsLayer::new()
-        .allow_methods([Method::POST])
-        .allow_origin(Any)
-        .allow_headers(Any);
+    let app = qubic_rpc_router_v2(format!("{}:21841", args.computor));
 
-    let app = Router::new()
-        .route("/", post(request_handler))
-        .with_state(state.clone())
-        .layer(cors);
-
-    info!("Binding server to port {}", state.port);
-    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", state.port))
+    info!("Binding server to port {}", args.port);
+    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", args.port))
         .await
         .unwrap();
-    axum::serve(tcp_listener, app.into_make_service())
-        .await
-        .unwrap();
+
+    axum::serve(tcp_listener, app).await.unwrap();
 }
