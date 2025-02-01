@@ -8,7 +8,7 @@ use tokio::{
 use tower_http::cors::{Any, CorsLayer};
 
 extern crate qubic_rpc;
-use qubic_rpc::qubic_rpc_router_v2;
+use qubic_rpc::{qubic_rpc_router_v2, RPCState};
 
 const COMPUTOR_ADDRESS: &str = "45.152.160.28";
 
@@ -27,10 +27,15 @@ pub async fn setup() -> (String, JoinHandle<()>) {
 }
 
 pub async fn server(port: String) {
-    let app = qubic_rpc_router_v2(COMPUTOR_ADDRESS.to_string());
+    let state = RPCState::new(COMPUTOR_ADDRESS.to_string());
+
+    let routes = qubic_rpc_router_v2();
+
     let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", port))
         .await
         .unwrap();
 
-    axum::serve(tcp_listener, app).await.unwrap();
+    axum::serve(tcp_listener, routes.with_state(state))
+        .await
+        .unwrap();
 }

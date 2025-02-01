@@ -2,7 +2,7 @@ use clap::Parser;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-use qubic_rpc::qubic_rpc_router_v2;
+use qubic_rpc::{qubic_rpc_router_v2, RPCState};
 
 #[macro_use]
 extern crate log;
@@ -26,12 +26,17 @@ async fn main() {
 
     let args = Arc::new(Args::parse());
 
-    let app = qubic_rpc_router_v2(format!("{}:21841", args.computor));
+    let routes = qubic_rpc_router_v2();
+
+    let computor_address = format!("{}:21841", args.computor);
+    let state = RPCState::new(computor_address);
 
     info!("Binding server to port {}", args.port);
     let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", args.port))
         .await
         .unwrap();
 
-    axum::serve(tcp_listener, app).await.unwrap();
+    axum::serve(tcp_listener, routes.with_state(state))
+        .await
+        .unwrap();
 }

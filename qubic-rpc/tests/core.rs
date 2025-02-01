@@ -21,3 +21,38 @@ async fn get_index() {
     // Shut down the server
     server_handle.abort();
 }
+
+#[tokio::test]
+async fn latest_tick() {
+    assert!(false);
+}
+
+#[tokio::test]
+async fn approved_transactions_for_tick() {
+    assert!(false);
+}
+
+#[tokio::test]
+async fn tick_data() {
+    assert!(false);
+}
+
+#[tokio::test]
+async fn chain_hash() {
+    assert!(false);
+}
+
+#[tokio::test]
+async fn quorum_tick_data() {
+    assert!(false);
+}
+
+#[tokio::test]
+async fn store_hash() {
+    assert!(false);
+}
+
+#[tokio::test]
+async fn approved_transactions_for_tick() {
+    assert!(false);
+}
