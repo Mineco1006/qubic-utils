@@ -75,6 +75,7 @@ pub struct QubicId(pub [u8; 32]);
 /// let signature = wallet.sign(&data);
 /// ```
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QubicWallet {
     private_key: [u8; 32],
     subseed: [u8; 32],

@@ -27,9 +27,9 @@ pub async fn setup() -> (String, JoinHandle<()>) {
 }
 
 pub async fn server(port: String) {
-    let state = RPCState::new(COMPUTOR_ADDRESS.to_string());
+    let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
 
-    let routes = qubic_rpc_router_v2();
+    let routes = qubic_rpc_router_v2(state.clone());
 
     let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", port))
         .await

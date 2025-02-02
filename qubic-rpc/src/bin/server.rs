@@ -26,10 +26,10 @@ async fn main() {
 
     let args = Arc::new(Args::parse());
 
-    let routes = qubic_rpc_router_v2();
-
     let computor_address = format!("{}:21841", args.computor);
-    let state = RPCState::new(computor_address);
+    let state = Arc::new(RPCState::new(computor_address));
+
+    let routes = qubic_rpc_router_v2(state.clone());
 
     info!("Binding server to port {}", args.port);
     let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", args.port))

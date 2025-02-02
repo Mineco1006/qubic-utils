@@ -11,8 +11,8 @@ bench = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-qubic-rs = { path = "../qubic-rs", default-features = false, features = ["serde", "async"]}
-axum = "0.7"
+qubic-rs = { path = "../qubic-rs", default-features = false, features = ["async"]}
+axum = { version = "0.8.1" }
 tokio = { version = "*", features = ["full"] }
 serde = { version = "*", features = ["derive"] }
 hex = "*"
@@ -23,6 +23,8 @@ clap = { version = "4.4.7", features = ["derive"]}
 crossbeam-channel = "*"
 rand = "0.9.0"
 anyhow = "1.0.95"
+http = "1.2.0"
+serde_json = "*"
 
 [dev-dependencies]
 reqwest = { version= "*", features = ["rustls", "json"]}

@@ -24,6 +24,7 @@ async fn get_index() {
 
 #[tokio::test]
 async fn latest_tick() {
+    // should succeed
     assert!(false);
 }
 
@@ -49,10 +50,5 @@ async fn quorum_tick_data() {
 
 #[tokio::test]
 async fn store_hash() {
-    assert!(false);
-}
-
-#[tokio::test]
-async fn approved_transactions_for_tick() {
     assert!(false);
 }

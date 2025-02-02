@@ -6,7 +6,11 @@
 //! ```rust,no_run
 //! ```
 
-use axum::{http::Method, routing::get, Router};
+use axum::{
+    http::Method,
+    routing::{get, post},
+    Router,
+};
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -54,7 +58,7 @@ impl RPCState {
     }
 }
 
-pub fn qubic_rpc_router_v2() -> Router {
+pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {
     let cors = CorsLayer::new()
         .allow_methods([Method::POST])
         .allow_origin(Any)
@@ -70,36 +74,37 @@ pub fn qubic_rpc_router_v2() -> Router {
         .route("/{tick}/quorum-tick-data", get(routes::quorum_tick_data))
         .route("/{tick}/store-hash", get(routes::store_hash));
 
-    // let assets_router = Router::new()
-    //     .route("/{identity}/issued", get(routes::issued_assets))
-    //     .route("/{identity}/owned", get(routes::owned_assets))
-    //     .route("/{identity}/possessed", get(routes::possessed_assets));
+    let assets_router = Router::new()
+        .route("/{identity}/issued", get(routes::issued_assets))
+        .route("/{identity}/owned", get(routes::owned_assets))
+        .route("/{identity}/possessed", get(routes::possessed_assets));
 
     Router::new()
         .layer(cors)
         .route("/", get(routes::index))
         .route("/latestTick", get(routes::latest_tick))
-        // .route(
-        //     "/broadcast-transaction",
-        //     post(routes::broadcast_transaction),
-        // )
-        // .route("/balances/{id}", get(routes::wallet_balance))
-        // .route("/status", get(routes::status))
-        // .route("/transactions/{tx_id}", get(routes::transaction))
-        // .route("/tx-status/{tx_id}", get(routes::transaction_status))
-        // .route(
-        //     "/identities/{id}/transfer-transactions",
-        //     get(routes::transfer_transactions_per_tick),
-        // )
-        // .route("/healthcheck", get(routes::health_check))
-        // .route("/epochs/{epoch}/computors", get(routes::computors))
-        // .route("/querySmartContract", post(routes::query_sc))
-        // .route("/tick-info", get(routes::tick_info))
-        // .route("/block-height", get(routes::block_height))
-        // .route("/latest-stats", get(routes::latest_stats))
-        // .route("/rich-list", get(routes::rich_list))
+        .route(
+            "/broadcast-transaction",
+            post(routes::broadcast_transaction),
+        )
+        .route("/balances/{id}", get(routes::wallet_balance))
+        .route("/status", get(routes::status))
+        .route("/transactions/{tx_id}", get(routes::transaction))
+        .route("/tx-status/{tx_id}", get(routes::transaction_status))
+        .route(
+            "/identities/{id}/transfer-transactions",
+            get(routes::transfer_transactions_per_tick),
+        )
+        .route("/healthcheck", get(routes::health_check))
+        .route("/epochs/{epoch}/computors", get(routes::computors))
+        .route("/querySmartContract", post(routes::query_sc))
+        .route("/tick-info", get(routes::tick_info))
+        .route("/block-height", get(routes::block_height))
+        .route("/latest-stats", get(routes::latest_stats))
+        .route("/rich-list", get(routes::rich_list))
         .nest("/ticks", ticks_router)
-    // .nest("/assets", assets_router)
+        .nest("/assets", assets_router)
+        .with_state(state)
 }
 
 // TODO: remove altogether
