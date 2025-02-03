@@ -10,7 +10,7 @@ use tower_http::cors::{Any, CorsLayer};
 extern crate qubic_rpc;
 use qubic_rpc::{qubic_rpc_router_v2, RPCState};
 
-const COMPUTOR_ADDRESS: &str = "45.152.160.28";
+const COMPUTOR_ADDRESS: &str = "45.152.160.28:21841";
 
 pub async fn setup() -> (String, JoinHandle<()>) {
     // Generate a random port number between 2003 and 2999 (inclusive)

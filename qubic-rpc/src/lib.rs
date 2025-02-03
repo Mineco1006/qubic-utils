@@ -17,36 +17,6 @@ use tower_http::cors::{Any, CorsLayer};
 pub mod qubic_rpc_types;
 pub mod routes;
 
-#[macro_export]
-macro_rules! result_or_501 {
-    ($handle: expr, $rpc_method: expr) => {
-        match $handle {
-            Ok(res) => res,
-            Err(_) => {
-                return Json(QubicJsonRpcResponse {
-                    jsonrpc: "2.0".to_owned(),
-                    id: $rpc_method.id,
-                    response: ResponseType::Error(RequestError {
-                        method: $rpc_method.request.get_method(),
-                        error: "InternalServerError".to_owned(),
-                    }),
-                })
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! early_return_result {
-    ($res_type: expr, $rpc_method: expr) => {
-        return Json(QubicJsonRpcResponse {
-            jsonrpc: "2.0".to_owned(),
-            id: $rpc_method.id,
-            response: ResponseType::Result($res_type),
-        })
-    };
-}
-
 #[derive(Debug, Clone)]
 pub struct RPCState {
     computor_address: String,
@@ -106,58 +76,3 @@ pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {
         .nest("/assets", assets_router)
         .with_state(state)
 }
-
-// TODO: remove altogether
-// pub async fn request_handler(
-//     State(state): State<Arc<RPCState>>,
-//     Json(rpc_method): Json<QubicJsonRpcRequest>,
-// ) -> Json<QubicJsonRpcResponse> {
-//     info!("Incoming request: {rpc_method:?}");
-
-//     if rpc_method.jsonrpc.as_str() != "2.0" {
-//         return Json(QubicJsonRpcResponse {
-//             jsonrpc: "2.0".to_owned(),
-//             id: rpc_method.id,
-//             response: ResponseType::Error(RequestError {
-//                 method: rpc_method.request.get_method(),
-//                 error: "Invalid JSON-RPC version found".to_owned(),
-//             }),
-//         });
-//     }
-
-//     let client = Client::<Tcp>::new(&state.computor).await.unwrap();
-
-//     match rpc_method.request {
-//         RequestMethods::RequestComputors => {
-//             let res = result_or_501!(client.qu().request_computors().await, rpc_method);
-
-//             early_return_result!(RequestResults::RequestComputors(res.into()), rpc_method);
-//         }
-//         RequestMethods::RequestCurrentTickInfo => {
-//             let res = result_or_501!(client.qu().get_current_tick_info().await, rpc_method);
-
-//             early_return_result!(RequestResults::RequestCurrentTickInfo(res), rpc_method);
-//         }
-//         RequestMethods::RequestEntity(id) => {
-//             let res = result_or_501!(client.qu().request_entity(id).await, rpc_method);
-
-//             early_return_result!(RequestResults::RequestEntity(res.entity), rpc_method);
-//         }
-//         RequestMethods::SendTransaction(tx) => {
-//             result_or_501!(client.qu().send_signed_transaction(tx).await, rpc_method);
-
-//             early_return_result!(RequestResults::SendTransaction(tx.into()), rpc_method);
-//         }
-//         RequestMethods::RequestTickTransactions(tick) => {
-//             let res = result_or_501!(
-//                 client
-//                     .qu()
-//                     .request_tick_transactions(tick, TransactionFlags::all())
-//                     .await,
-//                 rpc_method
-//             );
-
-//             early_return_result!(RequestResults::RequestTickTransactions(res), rpc_method);
-//         }
-//     }
-// }

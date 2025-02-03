@@ -3,6 +3,7 @@ use core::arch::x86_64::{_addcarry_u64, _subborrow_u64};
 
 use alloc::format;
 
+use base64::Engine;
 use core::{
     fmt::{Debug, Display},
     ptr::copy_nonoverlapping,
@@ -841,6 +842,27 @@ impl QubicTxHash {
         }
 
         String::from_utf8(identity.to_vec()).unwrap()
+    }
+    pub fn to_base64(&self) -> String {
+        base64::engine::general_purpose::STANDARD.encode(self.0)
+    }
+
+    pub fn try_from_base64(s: &str) -> Result<Self, QubicError> {
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(s)
+            .map_err(|_| QubicError::FormattingError)?;
+
+        if decoded.len() != 32 {
+            return Err(QubicError::InvalidIdLengthError {
+                ident: "TxHash",
+                expected: 32,
+                found: decoded.len(),
+            });
+        }
+
+        let mut buffer = [0u8; 32];
+        buffer.copy_from_slice(&decoded);
+        Ok(Self(buffer))
     }
 }
 

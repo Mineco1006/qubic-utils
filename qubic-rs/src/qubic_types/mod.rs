@@ -89,7 +89,7 @@ pub struct QubicTxHash(pub [u8; 32]);
 mod tests {
     use core::str::FromStr;
 
-    use crate::qubic_types::{QubicId, QubicWallet};
+    use crate::qubic_types::{QubicId, QubicTxHash, QubicWallet};
     const SEED: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const ID: &str = "BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK";
 
@@ -105,6 +105,16 @@ mod tests {
                 18, 67, 89, 128, 179, 237, 227, 192, 140, 49, 90, 37, 68
             ]
         );
+    }
+
+    #[test]
+    pub fn test_base64_tx_hash() {
+        let tx =
+            QubicTxHash::from_str("guxuamdfrnpbhcocehdxvlamnwxghjewmjfphqefieytupsjmodvluihxadg")
+                .unwrap();
+        let base64_hash = tx.to_base64();
+        let un_based64_hash = QubicTxHash::try_from_base64(&base64_hash).unwrap();
+        assert_eq!(un_based64_hash, tx);
     }
 
     // Test wallet signature & public key generation from 55 character seed

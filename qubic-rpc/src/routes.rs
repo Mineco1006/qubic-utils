@@ -7,15 +7,15 @@ use axum::{
 use http::status::StatusCode;
 use qubic_rs::{
     client::Client,
-    qubic_tcp_types::types::{ticks::CurrentTickInfo, transactions::Transaction},
+    qubic_tcp_types::types::transactions::Transaction,
     qubic_types::{QubicId, QubicWallet},
     transport::Tcp,
 };
 use std::sync::Arc;
 
-use crate::RPCState;
+use crate::{qubic_rpc_types::LatestTick, RPCState};
 
-struct QubicRpcError(anyhow::Error);
+pub struct QubicRpcError(anyhow::Error);
 
 impl IntoResponse for QubicRpcError {
     fn into_response(self) -> Response {
@@ -36,11 +36,13 @@ where
 pub async fn index() -> impl IntoResponse {
     Json("Qubic RPC API v2".to_string())
 }
+#[axum::debug_handler]
 pub async fn latest_tick(
     State(state): State<Arc<RPCState>>,
-) -> Result<CurrentTickInfo, QubicRpcError> {
+) -> Result<impl IntoResponse, QubicRpcError> {
     let client = Client::<Tcp>::new(&state.computor_address).await?;
-    Ok(client.qu().get_current_tick_info().await?)
+    let latest_tick_resp: LatestTick = client.qu().get_current_tick_info().await?.into();
+    Ok(Json(latest_tick_resp))
 }
 pub async fn broadcast_transaction() -> impl IntoResponse {
     (StatusCode::NOT_IMPLEMENTED, "Not implemented yet")
