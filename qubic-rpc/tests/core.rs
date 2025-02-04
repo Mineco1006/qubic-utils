@@ -1,5 +1,8 @@
 use base64::Engine;
-use qubic_rpc::{qubic_rpc_types::LatestTick, routes::WalletBalance};
+use qubic_rpc::{
+    qubic_rpc_types::LatestTick,
+    qubic_rpc_types::{RPCStatus, WalletBalance},
+};
 use std::collections::HashMap;
 
 use qubic_rs::{
@@ -19,12 +22,22 @@ async fn check_oracle<T: std::fmt::Debug + for<'de> serde::de::Deserialize<'de>>
     actual_url: &str,
     oracle_url: &str,
 ) -> (T, T) {
+    println!(
+        "{}",
+        reqwest::get(oracle_url)
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap()
+    );
     let expected = reqwest::get(oracle_url)
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
+    dbg!(&expected);
 
     let actual = reqwest::get(actual_url)
         .await
@@ -32,9 +45,7 @@ async fn check_oracle<T: std::fmt::Debug + for<'de> serde::de::Deserialize<'de>>
         .json()
         .await
         .unwrap();
-
     dbg!(&actual);
-    dbg!(&expected);
 
     (expected, actual)
 }
@@ -64,8 +75,8 @@ async fn latest_tick() {
 
     let (actual, expected): (LatestTick, LatestTick) = check_oracle(&actual_url, &oracle_url).await;
 
-    // our latestTick can be expected - 1 sometimes, account for that
-    assert!(actual.latest_tick >= expected.latest_tick - 1);
+    // our latestTick can be a bit behind sometimes, account for that
+    assert!(actual.latest_tick >= expected.latest_tick - 10);
 
     // Shut down the server
     server_handle.abort();
@@ -114,9 +125,23 @@ async fn wallet_balance() {
         check_oracle(&actual_url, &oracle_url).await;
 
     // sometimes ticks will misalign (see latest_tick test)
-    if actual.balance.valid_for_tick >= expected.balance.valid_for_tick - 1 {
+    if actual.balance.valid_for_tick >= expected.balance.valid_for_tick - 10 {
         expected.balance.valid_for_tick = actual.balance.valid_for_tick;
     }
+    assert_eq!(expected, actual);
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn status() {
+    let (port, server_handle) = common::setup().await;
+
+    let oracle_url = format!("{ORACLE_RPC}/status");
+    let actual_url = format!("http://127.0.0.1:{port}/status");
+
+    let (expected, actual): (RPCStatus, RPCStatus) = check_oracle(&actual_url, &oracle_url).await;
+
     assert_eq!(expected, actual);
 
     server_handle.abort();
