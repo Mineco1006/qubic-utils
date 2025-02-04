@@ -28,7 +28,7 @@ pub struct LatestTick {
 impl From<CurrentTickInfo> for LatestTick {
     fn from(tick_info: CurrentTickInfo) -> Self {
         Self {
-            latest_tick: tick_info.tick - 1,
+            latest_tick: tick_info.tick,
         }
     }
 }

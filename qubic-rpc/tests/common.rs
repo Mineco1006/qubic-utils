@@ -1,16 +1,14 @@
-use axum::{http::Method, routing::post, Router};
 use rand::Rng;
 use std::sync::Arc;
 use tokio::{
     net::TcpListener,
     task::{self, JoinHandle},
 };
-use tower_http::cors::{Any, CorsLayer};
 
 extern crate qubic_rpc;
 use qubic_rpc::{qubic_rpc_router_v2, RPCState};
 
-const COMPUTOR_ADDRESS: &str = "45.152.160.28:21841";
+pub const COMPUTOR_ADDRESS: &str = "45.152.160.28:21841";
 
 pub async fn setup() -> (String, JoinHandle<()>) {
     // Generate a random port number between 2003 and 2999 (inclusive)

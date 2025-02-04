@@ -4,11 +4,12 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use base64::Engine;
 use http::status::StatusCode;
 use qubic_rs::{
     client::Client,
-    qubic_tcp_types::types::transactions::Transaction,
-    qubic_types::{QubicId, QubicWallet},
+    qubic_tcp_types::types::transactions::{Transaction, TransactionWithData},
+    qubic_types::{traits::FromBytes, QubicId, QubicWallet},
     transport::Tcp,
 };
 use std::sync::Arc;
@@ -33,6 +34,12 @@ where
     }
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BroadcastTransactionPayload {
+    encoded_transaction: String,
+}
+
 pub async fn index() -> impl IntoResponse {
     Json("Qubic RPC API v2".to_string())
 }
@@ -44,8 +51,19 @@ pub async fn latest_tick(
     let latest_tick_resp: LatestTick = client.qu().get_current_tick_info().await?.into();
     Ok(Json(latest_tick_resp))
 }
-pub async fn broadcast_transaction() -> impl IntoResponse {
-    (StatusCode::NOT_IMPLEMENTED, "Not implemented yet")
+pub async fn broadcast_transaction(
+    State(state): State<Arc<RPCState>>,
+    Json(payload): Json<BroadcastTransactionPayload>,
+) -> Result<impl IntoResponse, QubicRpcError> {
+    let client = Client::<Tcp>::new(&state.computor_address).await?;
+
+    let tx = Transaction::from_bytes(
+        &base64::engine::general_purpose::STANDARD.decode(payload.encoded_transaction)?,
+    )?;
+    println!("{:#?}", tx);
+    let _ = client.qu().send_signed_transaction(tx).await?;
+
+    Ok(Json("Broadcast successful"))
 }
 pub async fn wallet_balance(Path(_wallet): Path<QubicWallet>) -> impl IntoResponse {
     (StatusCode::NOT_IMPLEMENTED, "Not implemented yet")

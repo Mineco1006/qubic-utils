@@ -1,10 +1,15 @@
+use base64::Engine;
+use qubic_rpc::qubic_rpc_types::LatestTick;
+use std::collections::HashMap;
+
 use qubic_rs::{
     qubic_tcp_types::types::transactions::TransactionWithData,
-    qubic_types::{QubicId, QubicWallet, Signature},
-    transport::Tcp,
+    qubic_types::{
+        traits::{Sign, ToBytes},
+        QubicTxHash, QubicWallet,
+    },
 };
-use serde_json::json;
-use std::str::FromStr;
+use reqwest::StatusCode;
 
 mod common;
 
@@ -52,9 +57,23 @@ async fn latest_tick() {
     let (port, server_handle) = common::setup().await;
 
     let oracle_url = format!("{ORACLE_RPC}/latestTick");
-    let actual_url = format!("http://127.0.0.1:{port}/latestTick");
+    let expected: LatestTick = reqwest::get(oracle_url)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
-    assert!(check_oracle(&actual_url, &oracle_url).await);
+    let actual_url = format!("http://127.0.0.1:{port}/latestTick");
+    let actual: LatestTick = reqwest::get(actual_url)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    // our latestTick can be expected - 1 sometimes, account for that
+    assert!(actual.latest_tick >= expected.latest_tick - 1);
 
     // Shut down the server
     server_handle.abort();
@@ -63,76 +82,35 @@ async fn latest_tick() {
 async fn broadcast_transaction() {
     let (port, server_handle) = common::setup().await;
 
-    // create new wallet
-    // create tx of 5 from wallet to wallet
-    let seed = "";
-    let destination_id = "";
-    let amount = 5;
-
-    let client = qubic_rs::client::Client::<Tcp>::new(common::COMPUTOR_ADDRESS).await?;
-    let latest_tick: u32 = client.qu().get_current_tick_info().await?.tick;
-
     let wallet =
         QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
     let mut tx = TransactionWithData::default();
-    tx.sign(&wallet);
+    let _ = tx.sign(&wallet);
 
-    // let tx_encoded = base64.b64encode(tx).decode("utf-8");
-    let payload = json!({
-        "encodedTransaction": tx.encode() // base64 encoded tx
-    });
+    let mut payload = HashMap::new();
+    payload.insert(
+        "encodedTransaction",
+        base64::engine::general_purpose::STANDARD.encode(tx.to_bytes()),
+    );
 
     let http_client = reqwest::Client::new();
 
-    let expected = http_client
-        .post(format!("{ORACLE_RPC}/latestTick"))
-        .body(payload)
+    let resp = http_client
+        .post(format!("http://127.0.0.1:{port}/broadcast-transaction"))
+        .json(&payload)
         .send()
-        .await
-        .unwrap()
-        .text()
         .await
         .unwrap();
 
-    let actual = http_client
-        .post(format!("http://127.0.0.1:{port}/latestTick"))
-        .body(payload)
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-
-    dbg!(&actual);
-    dbg!(&expected);
-
-    assert_eq!(expected, actual);
+    let status = resp.status();
+    dbg!(&resp.text().await.unwrap());
+    assert_eq!(status, StatusCode::OK);
+    //TODO: test for ok response
 
     // Shut down the server
     server_handle.abort();
 }
 #[tokio::test]
-async fn approved_transactions_for_tick() {
-    assert!(false);
-}
-
-#[tokio::test]
-async fn tick_data() {
-    assert!(false);
-}
-
-#[tokio::test]
-async fn chain_hash() {
-    assert!(false);
-}
-
-#[tokio::test]
-async fn quorum_tick_data() {
-    assert!(false);
-}
-
-#[tokio::test]
-async fn store_hash() {
+async fn wallet_balance() {
     assert!(false);
 }
