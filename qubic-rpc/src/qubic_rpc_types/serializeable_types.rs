@@ -1,7 +1,9 @@
+use base64::Engine;
 use qubic_rs::{
     qubic_tcp_types::types::{ticks::CurrentTickInfo, Computors, RespondedEntity},
     qubic_types::{QubicId, Signature},
 };
+use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +41,51 @@ impl From<CurrentTickInfo> for LatestTick {
 #[serde(rename_all = "camelCase")]
 pub struct BroadcastTransactionPayload {
     pub encoded_transaction: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestSCPayload {
+    #[serde(deserialize_with = "deserialize_u32")]
+    pub contract_index: u32,
+
+    #[serde(deserialize_with = "deserialize_u16")]
+    pub input_type: u16,
+
+    #[serde(deserialize_with = "deserialize_u16")]
+    pub input_size: u16,
+
+    #[serde(deserialize_with = "deserialize_base64")]
+    pub request_data: Vec<u8>,
+}
+
+// Deserialize u32 from a string
+fn deserialize_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    s.parse::<u32>().map_err(de::Error::custom)
+}
+
+// Deserialize u16 from a string
+fn deserialize_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    s.parse::<u16>().map_err(de::Error::custom)
+}
+
+// Deserialize base64-encoded input string to Vec<u8>
+fn deserialize_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .map_err(de::Error::custom)
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,3 +1,4 @@
+use axum::body::to_bytes;
 use base64::Engine;
 use qubic_rpc::qubic_rpc_types::{
     APIStatus, LatestTick, RPCStatus, TransactionResponse, WalletBalance,
@@ -5,7 +6,10 @@ use qubic_rpc::qubic_rpc_types::{
 use std::collections::HashMap;
 
 use qubic_rs::{
-    qubic_tcp_types::types::{ticks::CurrentTickInfo, transactions::TransactionWithData},
+    qubic_tcp_types::types::{
+        contracts::ResponseContractFunction, ticks::CurrentTickInfo,
+        transactions::TransactionWithData,
+    },
     qubic_types::{
         traits::{Sign, ToBytes},
         QubicWallet,
@@ -163,13 +167,59 @@ async fn transaction() {
 }
 
 #[tokio::test]
+async fn query_sc() {
+    let (port, server_handle) = common::setup().await;
+
+    let contract_index = "1".to_string();
+    let input_type = "1".to_string();
+    let input_size = "0".to_string();
+    let request_data = "".to_string();
+
+    let mut payload = HashMap::new();
+    payload.insert("contractIndex", contract_index);
+    payload.insert("inputType", input_type);
+    payload.insert("inputSize", input_size);
+    payload.insert(
+        "requestData",
+        base64::engine::general_purpose::STANDARD.encode(request_data.as_bytes()),
+    );
+
+    let http_client = reqwest::Client::new();
+
+    let resp = http_client
+        .post(format!("http://127.0.0.1:{port}/querySmartContract"))
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+
+    let status = resp.status();
+    let actual_sc_data: ResponseContractFunction = resp.json().await.unwrap(); // must succeed
+
+    let expected_sc_data = ResponseContractFunction {
+        output: base64::engine::general_purpose::STANDARD
+            .decode("AMqaO2QAAADAxi0A")
+            .unwrap(),
+    };
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(actual_sc_data, expected_sc_data);
+
+    // Shut down the server
+    server_handle.abort();
+}
+
+#[tokio::test]
 async fn tick_info() {
     let (port, server_handle) = common::setup().await;
 
     let resp = reqwest::get(format!("http://127.0.0.1:{port}/tick-info"))
         .await
         .unwrap();
+
     assert_eq!(resp.status(), StatusCode::OK);
+
+    let _resp_tick_info: CurrentTickInfo = resp.json().await.unwrap(); // must succeed
 
     // Shut down the server
     server_handle.abort();

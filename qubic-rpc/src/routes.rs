@@ -15,7 +15,7 @@ use std::{str::FromStr, sync::Arc};
 use crate::{
     qubic_rpc_types::{
         APIStatus, Balance, BroadcastTransactionPayload, LatestTick, QubicRpcError, RPCStatus,
-        WalletBalance,
+        RequestSCPayload, WalletBalance,
     },
     RPCState,
 };
@@ -89,9 +89,20 @@ pub async fn computors(
     Ok(Json(""))
 }
 pub async fn query_sc(
-    State(_state): State<Arc<RPCState>>,
+    State(state): State<Arc<RPCState>>,
+    Json(payload): Json<RequestSCPayload>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+    let client = Client::<Tcp>::new(&state.computor_address).await?;
+    let resp = client
+        .qu()
+        .request_contract_function(
+            payload.contract_index,
+            payload.input_type,
+            payload.input_size,
+            base64::engine::general_purpose::STANDARD.decode(payload.request_data)?,
+        )
+        .await?;
+    Ok(Json(resp))
 }
 pub async fn tick_info(
     State(state): State<Arc<RPCState>>,
