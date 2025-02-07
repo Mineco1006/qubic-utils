@@ -36,12 +36,10 @@ pub async fn broadcast_transaction(
     Json(payload): Json<BroadcastTransactionPayload>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
     let client = Client::<Tcp>::new(&state.computor_address).await?;
-
     let tx = Transaction::from_bytes(
         &base64::engine::general_purpose::STANDARD.decode(payload.encoded_transaction)?,
     )?;
     let _ = client.qu().send_signed_transaction(tx).await?;
-
     Ok(Json("Broadcast successful"))
 }
 /// Returns the balance of a specific wallet from the API.
@@ -84,14 +82,22 @@ pub async fn health_check(
         version: "v2".to_string(),
     }))
 }
-pub async fn computors(Path(_epoch): Path<u32>) -> Result<impl IntoResponse, QubicRpcError> {
+pub async fn computors(
+    State(_state): State<Arc<RPCState>>,
+    Path(_epoch): Path<u32>,
+) -> Result<impl IntoResponse, QubicRpcError> {
     Ok(Json(""))
 }
-pub async fn query_sc() -> Result<impl IntoResponse, QubicRpcError> {
+pub async fn query_sc(
+    State(_state): State<Arc<RPCState>>,
+) -> Result<impl IntoResponse, QubicRpcError> {
     Ok(Json(""))
 }
-pub async fn tick_info() -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+pub async fn tick_info(
+    State(state): State<Arc<RPCState>>,
+) -> Result<impl IntoResponse, QubicRpcError> {
+    let client = Client::<Tcp>::new(&state.computor_address).await?;
+    Ok(Json(client.qu().get_current_tick_info().await?))
 }
 pub async fn block_height() -> Result<impl IntoResponse, QubicRpcError> {
     Ok(Json(""))

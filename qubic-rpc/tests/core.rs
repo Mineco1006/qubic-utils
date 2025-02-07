@@ -5,7 +5,7 @@ use qubic_rpc::qubic_rpc_types::{
 use std::collections::HashMap;
 
 use qubic_rs::{
-    qubic_tcp_types::types::transactions::TransactionWithData,
+    qubic_tcp_types::types::{ticks::CurrentTickInfo, transactions::TransactionWithData},
     qubic_types::{
         traits::{Sign, ToBytes},
         QubicWallet,
@@ -159,5 +159,18 @@ async fn transaction() {
     }
     assert_eq!(expected, actual);
 
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn tick_info() {
+    let (port, server_handle) = common::setup().await;
+
+    let resp = reqwest::get(format!("http://127.0.0.1:{port}/tick-info"))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Shut down the server
     server_handle.abort();
 }
