@@ -1,7 +1,6 @@
 use base64::Engine;
-use qubic_rpc::{
-    qubic_rpc_types::LatestTick,
-    qubic_rpc_types::{RPCStatus, WalletBalance},
+use qubic_rpc::qubic_rpc_types::{
+    APIStatus, LatestTick, RPCStatus, TransactionResponse, WalletBalance,
 };
 use std::collections::HashMap;
 
@@ -22,23 +21,6 @@ async fn check_oracle<T: std::fmt::Debug + for<'de> serde::de::Deserialize<'de>>
     actual_url: &str,
     oracle_url: &str,
 ) -> (T, T) {
-    println!(
-        "{}",
-        reqwest::get(oracle_url)
-            .await
-            .unwrap()
-            .text()
-            .await
-            .unwrap()
-    );
-    let expected = reqwest::get(oracle_url)
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    dbg!(&expected);
-
     let actual = reqwest::get(actual_url)
         .await
         .unwrap()
@@ -46,6 +28,14 @@ async fn check_oracle<T: std::fmt::Debug + for<'de> serde::de::Deserialize<'de>>
         .await
         .unwrap();
     dbg!(&actual);
+
+    let expected = reqwest::get(oracle_url)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    dbg!(&expected);
 
     (expected, actual)
 }
@@ -134,14 +124,39 @@ async fn wallet_balance() {
 }
 
 #[tokio::test]
-async fn status() {
+async fn health_check() {
     let (port, server_handle) = common::setup().await;
 
-    let oracle_url = format!("{ORACLE_RPC}/status");
-    let actual_url = format!("http://127.0.0.1:{port}/status");
+    let resp = reqwest::get(format!("http://127.0.0.1:{port}/healthcheck"))
+        .await
+        .unwrap();
 
-    let (expected, actual): (RPCStatus, RPCStatus) = check_oracle(&actual_url, &oracle_url).await;
+    let http_status = resp.status();
+    let rpc_status: RPCStatus = resp.json().await.unwrap();
 
+    let api_status = rpc_status.status;
+
+    assert_eq!(http_status, StatusCode::OK);
+    assert_eq!(api_status, APIStatus::Ok);
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn transaction() {
+    let (port, server_handle) = common::setup().await;
+
+    let tx_id = "rlinciclnsqteajcanbecoedphdftskhikawqvedkfzbmiclqqnpgoagsbpb";
+    let oracle_url = format!("{ORACLE_RPC}/transactions/{tx_id}");
+    let actual_url = format!("http://127.0.0.1:{port}/transactions/{tx_id}");
+
+    let (mut expected, actual): (TransactionResponse, TransactionResponse) =
+        check_oracle(&actual_url, &oracle_url).await;
+
+    // sometimes ticks will misalign (see latest_tick test)
+    if actual.transaction.tick_number >= expected.transaction.tick_number - 10 {
+        expected.transaction.tick_number = actual.transaction.tick_number;
+    }
     assert_eq!(expected, actual);
 
     server_handle.abort();

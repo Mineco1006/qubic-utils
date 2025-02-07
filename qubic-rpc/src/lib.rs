@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use tower_http::cors::{Any, CorsLayer};
 
 pub mod qubic_rpc_types;
@@ -20,11 +20,16 @@ pub mod routes;
 #[derive(Debug, Clone)]
 pub struct RPCState {
     computor_address: String,
+    start_time: Instant,
 }
 
 impl RPCState {
     pub fn new(computor_address: String) -> Self {
-        Self { computor_address }
+        let start_time = Instant::now();
+        Self {
+            computor_address,
+            start_time,
+        }
     }
 }
 

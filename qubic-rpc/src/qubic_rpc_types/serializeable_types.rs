@@ -82,12 +82,63 @@ pub struct WalletBalance {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TransactionResponseData {
+    pub source_id: String,
+    pub dest_id: String,
+    pub amount: String,
+    pub tick_number: u32,
+    pub input_type: u32,
+    pub input_size: u32,
+    pub input_hex: String,
+    pub signature_hex: String,
+    pub tx_id: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionResponse {
+    pub transaction: TransactionResponseData,
+    pub timestamp: String,
+    pub money_flew: bool,
+}
+
+// TODO: implement
+// impl From<RespondedEntity> for TransactionResponse {
+//     fn from(entity: RespondedEntity) -> Self {
+//         Self {
+//             transaction: TransactionResponseData {
+//                 source_id: (),
+//                 dest_id: (),
+//                 amount: entity.entity.balance().to_string(),
+//                 tick_number: entity.tick,
+//                 input_type: (),
+//                 input_size: (),
+//                 input_hex: (),
+//                 signature_hex: (),
+//                 tx_id: entity.public_key.to_string(),
+//             },
+//             timestamp: 0,
+//             money_flew: false,
+//         }
+//     }
+// }
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum APIStatus {
+    Ok,
+    Error,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RPCStatus {
-    pub last_processed_tick: LastProcessedTick,
-    pub last_processed_ticks_per_epoch: std::collections::HashMap<String, u64>,
-    pub skipped_ticks: Vec<SkippedTick>,
-    pub processed_tick_intervals_per_epoch: Vec<ProcessedTickIntervalPerEpoch>,
-    pub empty_ticks_per_epoch: std::collections::HashMap<String, u64>,
+    /// Server status: `"ok"` if healthy, `"error"` otherwise
+    pub status: APIStatus,
+    /// Uptime in seconds
+    pub uptime: u64,
+    /// Qubic RPC version (v2)
+    pub version: String,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
