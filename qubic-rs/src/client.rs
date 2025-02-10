@@ -12,7 +12,7 @@ use std::{
     thread::JoinHandle,
 };
 
-use crate::qubic_tcp_types::prelude::*;
+#[allow(unused_imports)]
 use crate::qubic_tcp_types::{
     events::NetworkEvent,
     types::{
@@ -34,6 +34,7 @@ use crate::qubic_tcp_types::{
     },
     Header, MessageType,
 };
+use crate::qubic_tcp_types::{prelude::*, types::contracts::ResponseContractFunction};
 use crate::qubic_types::{
     traits::{FromBytes, Sign, ToBytes},
     QubicId, QubicTxHash, QubicWallet, Signature,
@@ -181,7 +182,7 @@ where
     }
 
     pub fn submit_work(&self, wallet: &QubicWallet, solution: WorkSolution) -> Result<()> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
@@ -200,7 +201,7 @@ where
 
         loop {
             unsafe {
-                message.gamming_nonce.0 = rng.gen();
+                message.gamming_nonce.0 = rng.random();
                 copy_nonoverlapping(
                     message.gamming_nonce.0.as_ptr(),
                     shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8,
@@ -489,6 +490,7 @@ where
                 contract_index: SEND_TO_MANY_CONTRACT_INDEX,
                 input_type: 1,
                 input_size: 0,
+                input: Vec::new(),
             },
             true,
         );
@@ -714,7 +716,7 @@ where
     }
 
     pub async fn submit_work(&self, wallet: &QubicWallet, solution: WorkSolution) -> Result<()> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
@@ -733,7 +735,7 @@ where
 
         loop {
             unsafe {
-                message.gamming_nonce.0 = rng.gen();
+                message.gamming_nonce.0 = rng.random();
                 copy_nonoverlapping(
                     message.gamming_nonce.0.as_ptr(),
                     shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8,
@@ -835,6 +837,12 @@ where
         self.transport.send_with_response(packet).await
     }
 
+    pub async fn request_system_info(&self) -> Result<SystemInfo> {
+        let packet = Packet::new(RequestSystemInfo, true);
+
+        self.transport.send_with_response(packet).await
+    }
+
     pub async fn exchange_public_peers(
         &self,
         peers: ExchangePublicPeers,
@@ -852,6 +860,45 @@ where
         let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
 
         self.transport.send_with_multiple_responses(packet).await
+    }
+
+    pub async fn check_transaction_status(
+        &self,
+        tx_hash: QubicTxHash,
+        tick: u32,
+    ) -> Result<TransactionStatus> {
+        let mut status = TransactionStatus::Failed;
+
+        let tt_packet = Packet::new(
+            RequestedTickTransactions {
+                tick,
+                flags: TransactionFlags::all(),
+            },
+            true,
+        );
+        let tt: Vec<TransactionWithData> = self
+            .transport
+            .send_with_multiple_responses(tt_packet)
+            .await?;
+
+        for tx in tt {
+            let digest: QubicTxHash = tx.into();
+            if digest == tx_hash {
+                status = TransactionStatus::Included;
+                break;
+            }
+        }
+
+        let td = self.request_tick_data(tick).await?;
+
+        for executed_tx_hash in td.transaction_digest {
+            if executed_tx_hash == tx_hash {
+                status = TransactionStatus::Executed;
+                break;
+            }
+        }
+
+        Ok(status)
     }
 
     pub async fn subscribe<F>(
@@ -972,6 +1019,85 @@ where
 
         self.transport.send_without_response(packet).await?;
         Ok(call.into())
+    }
+
+    pub async fn request_log(&self, passcode: [u64; 4]) -> Result<QubicLog> {
+        let packet = Packet::new(RequestLog { passcode }, true);
+
+        self.transport.send_with_response(packet).await
+    }
+
+    pub async fn request_contract_function(
+        &self,
+        contract_index: u32,
+        input_type: u16,
+        input_size: u16,
+        input: Vec<u8>,
+    ) -> Result<ResponseContractFunction> {
+        let packet = Packet::new(
+            RequestContractFunction {
+                contract_index,
+                input_type,
+                input_size,
+                input,
+            },
+            true,
+        );
+
+        self.transport.send_with_response(packet).await
+    }
+
+    pub async fn get_send_to_many_fees(&self) -> Result<SendToManyFeeOutput> {
+        let packet = Packet::new(
+            RequestContractFunction {
+                contract_index: SEND_TO_MANY_CONTRACT_INDEX,
+                input_type: 1,
+                input_size: 0,
+                input: Vec::new(),
+            },
+            true,
+        );
+
+        self.transport.send_with_response(packet).await
+    }
+
+    /// panics if txns.len() > 25
+    pub async fn send_to_many(
+        &self,
+        wallet: &QubicWallet,
+        txns: &[SendToManyTransaction],
+        tick: u32,
+    ) -> Result<QubicTxHash> {
+        let mut input = SendToManyInput::default();
+        for (idx, tx) in txns.into_iter().enumerate() {
+            input.ids[idx] = tx.id;
+            input.amounts[idx] = tx.amount;
+        }
+
+        let fee = self.get_send_to_many_fees().await?;
+
+        let tx = TransactionBuilder::new()
+            .with_amount(fee.fee as u64)
+            .with_signing_wallet(wallet)
+            .with_tick(tick)
+            .with_tx_data(TransactionData::SendToMany(input))
+            .build();
+
+        let hash = QubicTxHash::from(tx.clone());
+
+        let packet = Packet::new(tx, false);
+
+        self.transport.send_without_response(packet).await?;
+        Ok(hash)
+    }
+
+    pub async fn special_command_get_mining_ranking(
+        &self,
+        operator: &QubicWallet,
+    ) -> Result<MiningScoreRanking> {
+        let packet = Packet::new(SpecialCommand::new(GetMiningScoreRanking, operator), true);
+
+        self.transport.send_with_response(packet).await
     }
 }
 

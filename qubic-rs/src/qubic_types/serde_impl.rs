@@ -3,7 +3,10 @@ use core::str::FromStr;
 
 use serde::{de::Visitor, Deserialize, Serialize};
 
-use crate::qubic_types::{MiningSeed, Nonce, QubicId, QubicTxHash, Signature};
+use crate::{
+    qubic_tcp_types::types::ContractIpo,
+    qubic_types::{MiningSeed, Nonce, QubicId, QubicTxHash, Signature},
+};
 
 struct QubicIdVisitor;
 
@@ -50,6 +53,76 @@ impl<'de> Deserialize<'de> for QubicId {
         D: serde::Deserializer<'de>,
     {
         deserializer.deserialize_str(QubicIdVisitor)
+    }
+}
+
+impl Serialize for ContractIpo {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeTuple;
+
+        let mut seq = serializer.serialize_tuple(676)?;
+        for item in &self.public_keys {
+            seq.serialize_element(item)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ContractIpo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{SeqAccess, Visitor};
+        use std::fmt;
+
+        struct ContractIpoVisitor;
+
+        impl<'de> Visitor<'de> for ContractIpoVisitor {
+            type Value = ContractIpo;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a struct representing ContractIpo")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let contract_index = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                let tick = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+
+                let mut public_keys = [QubicId::default(); 676];
+                for i in 0..676 {
+                    public_keys[i] = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(2 + i, &self))?;
+                }
+
+                let mut prices = [0u64; 676];
+                for i in 0..676 {
+                    prices[i] = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(2 + 676 + i, &self))?;
+                }
+
+                Ok(ContractIpo {
+                    contract_index,
+                    tick,
+                    public_keys,
+                    prices,
+                })
+            }
+        }
+
+        deserializer.deserialize_seq(ContractIpoVisitor)
     }
 }
 

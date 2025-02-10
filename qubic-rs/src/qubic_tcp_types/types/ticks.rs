@@ -101,7 +101,7 @@ pub struct Tick {
     pub salted_universe_digest: H256,
     pub salted_computor_digest: H256,
 
-    pub transaction_digest: H256,
+    pub transaction_digest: [QubicTxHash; NUMBER_OF_TRANSACTION_PER_TICK],
     pub expected_next_tick_transaction_digest: H256,
     pub signature: Signature,
 }
