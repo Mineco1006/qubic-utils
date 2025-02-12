@@ -1,12 +1,15 @@
+use anyhow::anyhow;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{IntoResponse, Redirect},
     Json,
 };
 use base64::Engine;
 use qubic_rs::{
     client::Client,
-    qubic_tcp_types::types::transactions::Transaction,
+    qubic_tcp_types::types::transactions::{
+        Transaction, TransactionData::TransferAsset, TransactionFlags, TransactionWithData,
+    },
     qubic_types::{traits::FromBytes, QubicId},
     transport::Tcp,
 };
@@ -15,7 +18,7 @@ use std::{str::FromStr, sync::Arc};
 use crate::{
     qubic_rpc_types::{
         APIStatus, Balance, BroadcastTransactionPayload, LatestTick, QubicRpcError, RPCStatus,
-        RequestSCPayload, WalletBalance,
+        RequestSCPayload, TransferRequest, WalletBalance,
     },
     RPCState,
 };
@@ -56,21 +59,57 @@ pub async fn wallet_balance(
 pub async fn status(Path(_id): Path<QubicId>) -> Result<impl IntoResponse, QubicRpcError> {
     Ok(Json(""))
 }
+
 /// Returns information for a given transaction
-pub async fn transaction(
-    State(_state): State<Arc<RPCState>>,
-    Path(_id): Path<String>,
-) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
-}
+pub async fn transaction(State(_state): State<Arc<RPCState>>, Path(_id): Path<QubicId>) {}
+
 /// Returns the same information as `/transactions/{tx_id}`
 pub async fn transaction_status(Path(id): Path<String>) -> impl IntoResponse {
     Redirect::permanent(&format!("/transactions/{id}"))
 }
-pub async fn transfer_transactions_per_tick(
-    Path(_id): Path<QubicId>,
+pub async fn transfer_transactions_per_tick(Path(id): Path<String>) -> impl IntoResponse {
+    Redirect::permanent(&format!("/transactions/{id}"))
+}
+/// Returns information for a given transfer
+pub async fn transfer(
+    State(state): State<Arc<RPCState>>,
+    Path(id): Path<QubicId>,
+    Json(payload): Json<TransferRequest>,
+    // Query(sc_only): Query<Option<bool>>,
+    // Query(desc): Query<Option<bool>>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+    let flags = TransactionFlags::all();
+    let client = Client::<Tcp>::new(&state.computor_address).await?;
+
+    let latest_tick = client.qu().get_current_tick_info().await?.tick;
+
+    let start_tick = payload.start_tick.unwrap_or(latest_tick);
+    let end_tick = payload.end_tick.unwrap_or(latest_tick);
+
+    let mut wallet_transactions = Vec::<TransactionWithData>::new();
+    if payload.end_tick < payload.start_tick {
+        return Err(anyhow!("end_tick should be higher or equal to start_tick").into());
+    }
+
+    for tick in start_tick..end_tick + 1 {
+        let wallet_tick_transactions = client
+            .qu()
+            .request_tick_transactions(tick, flags)
+            .await?
+            .into_iter()
+            .filter(|tx| {
+                if let TransferAsset(asset_input) = tx.data {
+                    asset_input.destination == id
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<_>>();
+
+        wallet_transactions.extend(wallet_tick_transactions);
+    }
+
+    Ok(Json(wallet_transactions))
 }
 /// Returns general health information about RPC server
 pub async fn health_check(

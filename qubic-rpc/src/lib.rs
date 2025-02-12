@@ -70,6 +70,7 @@ pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {
             "/identities/{id}/transfer-transactions",
             get(routes::transfer_transactions_per_tick),
         )
+        .route("/identities/{id}/transfer", get(routes::transfer))
         .route("/healthcheck", get(routes::health_check))
         .route("/epochs/{epoch}/computors", get(routes::computors))
         .route("/querySmartContract", post(routes::query_sc))

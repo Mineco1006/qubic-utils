@@ -167,6 +167,27 @@ async fn transaction() {
 }
 
 #[tokio::test]
+async fn transfer_transactions_per_tick() {
+    let (port, server_handle) = common::setup().await;
+
+    let wallet_id = "rlinciclnsqteajcanbecoedphdftskhikawqvedkfzbmiclqqnpgoagsbpb";
+    let oracle_url = format!("{ORACLE_RPC}/identities/{wallet_id}/transfer-transactions");
+    let actual_url =
+        format!("http://127.0.0.1:{port}/identities/{wallet_id}/transfer-transactions");
+
+    let (mut expected, actual): (TransactionResponse, TransactionResponse) =
+        check_oracle(&actual_url, &oracle_url).await;
+
+    // sometimes ticks will misalign (see latest_tick test)
+    if actual.transaction.tick_number >= expected.transaction.tick_number - 10 {
+        expected.transaction.tick_number = actual.transaction.tick_number;
+    }
+    assert_eq!(expected, actual);
+
+    server_handle.abort();
+}
+
+#[tokio::test]
 async fn query_sc() {
     let (port, server_handle) = common::setup().await;
 

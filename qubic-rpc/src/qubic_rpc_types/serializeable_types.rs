@@ -1,7 +1,9 @@
 use base64::Engine;
 use qubic_rs::{
-    qubic_tcp_types::types::{ticks::CurrentTickInfo, Computors, RespondedEntity},
-    qubic_types::{QubicId, Signature},
+    qubic_tcp_types::types::{
+        ticks::CurrentTickInfo, transactions::TransactionWithData, Computors, RespondedEntity,
+    },
+    qubic_types::{traits::ToBytes, QubicId, Signature},
 };
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
@@ -134,8 +136,8 @@ pub struct TransactionResponseData {
     pub dest_id: String,
     pub amount: String,
     pub tick_number: u32,
-    pub input_type: u32,
-    pub input_size: u32,
+    pub input_type: u16,
+    pub input_size: u16,
     pub input_hex: String,
     pub signature_hex: String,
     pub tx_id: String,
@@ -144,31 +146,26 @@ pub struct TransactionResponseData {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionResponse {
-    pub transaction: TransactionResponseData,
+    pub transactions: Vec<TransactionResponseData>,
     pub timestamp: String,
     pub money_flew: bool,
 }
 
-// TODO: implement
-// impl From<RespondedEntity> for TransactionResponse {
-//     fn from(entity: RespondedEntity) -> Self {
-//         Self {
-//             transaction: TransactionResponseData {
-//                 source_id: (),
-//                 dest_id: (),
-//                 amount: entity.entity.balance().to_string(),
-//                 tick_number: entity.tick,
-//                 input_type: (),
-//                 input_size: (),
-//                 input_hex: (),
-//                 signature_hex: (),
-//                 tx_id: entity.public_key.to_string(),
-//             },
-//             timestamp: 0,
-//             money_flew: false,
-//         }
-//     }
-// }
+impl From<TransactionWithData> for TransactionResponseData {
+    fn from(tx: TransactionWithData) -> Self {
+        Self {
+            source_id: tx.raw_transaction.from.to_string(),
+            dest_id: tx.raw_transaction.to.to_string(),
+            amount: tx.raw_transaction.amount.to_string(),
+            tick_number: tx.raw_transaction.tick,
+            input_type: tx.raw_transaction.input_type,
+            input_size: tx.raw_transaction.input_size,
+            input_hex: hex::encode(tx.data.to_bytes()),
+            signature_hex: tx.signature.to_string(),
+            tx_id: "".to_string(), // TODO: find tx id
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -215,3 +212,10 @@ pub struct TickInterval {
     pub initial_processed_tick: u64,
     pub last_processed_tick: u64,
 }
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferRequest {
+    pub start_tick: Option<u32>,
+    pub end_tick: Option<u32>,
+}
+pub type TransferResponse = TransactionResponse;
