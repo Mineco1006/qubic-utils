@@ -1,4 +1,3 @@
-use axum::body::to_bytes;
 use base64::Engine;
 use qubic_rpc::qubic_rpc_types::{
     APIStatus, LatestTick, RPCStatus, TransactionResponse, WalletBalance,
@@ -46,7 +45,8 @@ async fn check_oracle<T: std::fmt::Debug + for<'de> serde::de::Deserialize<'de>>
 
 #[tokio::test]
 async fn get_index() {
-    let (port, server_handle) = common::setup().await;
+    let rt = common::get_global_runtime();
+    let port = common::ensure_server_started().await;
 
     let body = reqwest::get(format!("http://127.0.0.1:{port}"))
         .await
@@ -55,14 +55,11 @@ async fn get_index() {
         .await
         .unwrap();
     dbg!(&body);
-
-    // Shut down the server
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn latest_tick() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let oracle_url = format!("{ORACLE_RPC}/latestTick");
     let actual_url = format!("http://127.0.0.1:{port}/latestTick");
@@ -71,13 +68,11 @@ async fn latest_tick() {
 
     // our latestTick can be a bit behind sometimes, account for that
     assert!(actual.latest_tick >= expected.latest_tick - 10);
-
-    // Shut down the server
-    server_handle.abort();
 }
+
 #[tokio::test]
 async fn broadcast_transaction() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let wallet =
         QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
@@ -102,14 +97,11 @@ async fn broadcast_transaction() {
     let status = resp.status();
     dbg!(&resp.text().await.unwrap());
     assert_eq!(status, StatusCode::OK);
-
-    // Shut down the server
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn wallet_balance() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let wallet = "MGPAJNYEIENVTAQXEBARMUADANKBOOWIETOVESQIDCFFVZOVHLFBYIKDWITM";
     let oracle_url = format!("{ORACLE_RPC}/balances/{wallet}");
@@ -123,13 +115,11 @@ async fn wallet_balance() {
         expected.balance.valid_for_tick = actual.balance.valid_for_tick;
     }
     assert_eq!(expected, actual);
-
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn health_check() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let resp = reqwest::get(format!("http://127.0.0.1:{port}/healthcheck"))
         .await
@@ -142,54 +132,40 @@ async fn health_check() {
 
     assert_eq!(http_status, StatusCode::OK);
     assert_eq!(api_status, APIStatus::Ok);
-
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn transaction() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let tx_id = "rlinciclnsqteajcanbecoedphdftskhikawqvedkfzbmiclqqnpgoagsbpb";
     let oracle_url = format!("{ORACLE_RPC}/transactions/{tx_id}");
     let actual_url = format!("http://127.0.0.1:{port}/transactions/{tx_id}");
 
-    let (mut expected, actual): (TransactionResponse, TransactionResponse) =
+    let (expected, actual): (TransactionResponse, TransactionResponse) =
         check_oracle(&actual_url, &oracle_url).await;
 
-    // sometimes ticks will misalign (see latest_tick test)
-    if actual.transaction.tick_number >= expected.transaction.tick_number - 10 {
-        expected.transaction.tick_number = actual.transaction.tick_number;
-    }
     assert_eq!(expected, actual);
-
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn transfer_transactions_per_tick() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let wallet_id = "rlinciclnsqteajcanbecoedphdftskhikawqvedkfzbmiclqqnpgoagsbpb";
     let oracle_url = format!("{ORACLE_RPC}/identities/{wallet_id}/transfer-transactions");
     let actual_url =
         format!("http://127.0.0.1:{port}/identities/{wallet_id}/transfer-transactions");
 
-    let (mut expected, actual): (TransactionResponse, TransactionResponse) =
+    let (expected, actual): (TransactionResponse, TransactionResponse) =
         check_oracle(&actual_url, &oracle_url).await;
 
-    // sometimes ticks will misalign (see latest_tick test)
-    if actual.transaction.tick_number >= expected.transaction.tick_number - 10 {
-        expected.transaction.tick_number = actual.transaction.tick_number;
-    }
     assert_eq!(expected, actual);
-
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn query_sc() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let contract_index = "1".to_string();
     let input_type = "1".to_string();
@@ -225,14 +201,11 @@ async fn query_sc() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(actual_sc_data, expected_sc_data);
-
-    // Shut down the server
-    server_handle.abort();
 }
 
 #[tokio::test]
 async fn tick_info() {
-    let (port, server_handle) = common::setup().await;
+    let port = common::ensure_server_started().await;
 
     let resp = reqwest::get(format!("http://127.0.0.1:{port}/tick-info"))
         .await
@@ -241,7 +214,4 @@ async fn tick_info() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     let _resp_tick_info: CurrentTickInfo = resp.json().await.unwrap(); // must succeed
-
-    // Shut down the server
-    server_handle.abort();
 }
