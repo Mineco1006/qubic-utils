@@ -26,6 +26,9 @@ anyhow = "1.0.95"
 http = "1.2.0"
 serde_json = "*"
 base64 = "0.22.1"
+tower = "0.5.2"
+reqwest = "*"
+http-body-util = "0.1.2"
 
 [dev-dependencies]
 reqwest = { version= "*", features = ["rustls", "json"]}
