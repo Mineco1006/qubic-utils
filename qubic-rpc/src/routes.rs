@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{OriginalUri, Path, Query, State},
     response::{IntoResponse, Redirect},
     Json,
 };
@@ -13,12 +13,13 @@ use qubic_rs::{
     qubic_types::{traits::FromBytes, QubicId},
     transport::Tcp,
 };
-use std::{str::FromStr, sync::Arc};
+use serde::{de, Deserialize, Deserializer};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use crate::{
     qubic_rpc_types::{
         APIStatus, Balance, BroadcastTransactionPayload, LatestTick, QubicRpcError, RPCStatus,
-        RequestSCPayload, TransferRequest, WalletBalance,
+        RequestSCPayload, TickTransactions, TransferResponse, WalletBalance,
     },
     RPCState,
 };
@@ -67,32 +68,71 @@ pub async fn transaction(State(_state): State<Arc<RPCState>>, Path(_id): Path<Qu
 pub async fn transaction_status(Path(id): Path<String>) -> impl IntoResponse {
     Redirect::permanent(&format!("/transactions/{id}"))
 }
-pub async fn transfer_transactions_per_tick(Path(id): Path<String>) -> impl IntoResponse {
-    Redirect::permanent(&format!("/transactions/{id}"))
+pub async fn transfer_transactions_per_tick(
+    OriginalUri(uri): OriginalUri,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let query_params = uri
+        .path_and_query()
+        .and_then(|pq| pq.query())
+        .map(|q| format!("?{}", q))
+        .unwrap_or_default();
+
+    let redirect_url = format!("/identities/{id}/transfers{}", query_params);
+
+    Redirect::permanent(&redirect_url)
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct TransferQueryParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    start_tick: Option<u32>,
+    end_tick: Option<u32>,
+    sc_only: Option<bool>,
+    desc: Option<bool>,
+}
+/// Serde deserialization decorator to map empty Strings to None,
+fn empty_string_as_none<'de, D, T>(de: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let opt = Option::<String>::deserialize(de)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => FromStr::from_str(s).map_err(de::Error::custom).map(Some),
+    }
 }
 /// Returns information for a given transfer
-pub async fn transfer(
+pub async fn transfers(
     State(state): State<Arc<RPCState>>,
     Path(id): Path<QubicId>,
-    Json(payload): Json<TransferRequest>,
-    // Query(sc_only): Query<Option<bool>>,
-    // Query(desc): Query<Option<bool>>,
+    Query(query_params): Query<TransferQueryParams>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
     let flags = TransactionFlags::all();
     let client = Client::<Tcp>::new(&state.computor_address).await?;
 
     let latest_tick = client.qu().get_current_tick_info().await?.tick;
 
-    let start_tick = payload.start_tick.unwrap_or(latest_tick);
-    let end_tick = payload.end_tick.unwrap_or(latest_tick);
+    let start_tick = query_params.start_tick.unwrap_or(latest_tick);
+    let end_tick = query_params.end_tick.unwrap_or(latest_tick);
 
-    let mut wallet_transactions = Vec::<TransactionWithData>::new();
-    if payload.end_tick < payload.start_tick {
+    let mut transfer_transactions = Vec::<TransactionWithData>::new();
+    if end_tick < start_tick {
         return Err(anyhow!("end_tick should be higher or equal to start_tick").into());
     }
 
+    let max_tick_range = 100000000;
+    if end_tick - start_tick > max_tick_range {
+        return Err(anyhow!("tick range too big").into());
+    }
+
+    let mut resp = TransferResponse::new();
+
     for tick in start_tick..end_tick + 1 {
-        let wallet_tick_transactions = client
+        let tick_transactions = client
             .qu()
             .request_tick_transactions(tick, flags)
             .await?
@@ -106,10 +146,14 @@ pub async fn transfer(
             })
             .collect::<Vec<_>>();
 
-        wallet_transactions.extend(wallet_tick_transactions);
+        let tick_transactions = TickTransactions {
+            tick_number: tick,
+            identity: id.to_string(),
+            transactions: tick_transactions.into_iter().map(Into::into).collect(),
+        };
+        resp.transfer_transactions_per_tick.push(tick_transactions);
     }
-
-    Ok(Json(wallet_transactions))
+    Ok(Json(resp))
 }
 /// Returns general health information about RPC server
 pub async fn health_check(

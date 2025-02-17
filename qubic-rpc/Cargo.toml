@@ -12,7 +12,7 @@ bench = false
 
 [dependencies]
 qubic-rs = { path = "../qubic-rs", default-features = false, features = ["async"]}
-axum = { version = "0.8.1", features = ["macros"] }
+axum = { version = "0.8.1", features = ["macros", "query"] }
 tokio = { version = "*", features = ["full"] }
 serde = { version = "*", features = ["derive"] }
 hex = "*"

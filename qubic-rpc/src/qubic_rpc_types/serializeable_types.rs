@@ -214,8 +214,22 @@ pub struct TickInterval {
 }
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TransferRequest {
-    pub start_tick: Option<u32>,
-    pub end_tick: Option<u32>,
+pub struct TransferResponse {
+    pub transfer_transactions_per_tick: Vec<TickTransactions>,
 }
-pub type TransferResponse = TransactionResponse;
+
+impl TransferResponse {
+    pub fn new() -> Self {
+        Self {
+            transfer_transactions_per_tick: Vec::<TickTransactions>::new(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TickTransactions {
+    pub tick_number: u32,
+    pub identity: String,
+    pub transactions: Vec<TransactionResponseData>,
+}
