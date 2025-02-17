@@ -3,12 +3,12 @@ use qubic_rs::{
     qubic_tcp_types::types::{
         ticks::CurrentTickInfo, transactions::TransactionWithData, Computors, RespondedEntity,
     },
-    qubic_types::{traits::ToBytes, QubicId, Signature},
+    qubic_types::{traits::ToBytes, QubicId, QubicTxHash, Signature},
 };
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputorInfos {
     pub epoch: u16,
     pub ids: Vec<QubicId>,
@@ -25,7 +25,7 @@ impl From<Computors> for ComputorInfos {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LatestTick {
     pub latest_tick: u32,
@@ -39,13 +39,13 @@ impl From<CurrentTickInfo> for LatestTick {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BroadcastTransactionPayload {
     pub encoded_transaction: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestSCPayload {
     #[serde(deserialize_with = "deserialize_u32")]
@@ -90,7 +90,7 @@ where
         .map_err(de::Error::custom)
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
     id: QubicId,
@@ -123,13 +123,13 @@ impl From<RespondedEntity> for Balance {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletBalance {
     pub balance: Balance,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionResponseData {
     pub source_id: String,
@@ -143,9 +143,15 @@ pub struct TransactionResponseData {
     pub tx_id: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TransactionResponse {
+pub struct ApprovedTransactionsResponse {
+    pub approved_transactions: Vec<TransactionResponseData>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionsResponse {
     pub transactions: Vec<TransactionResponseData>,
     pub timestamp: String,
     pub money_flew: bool,
@@ -153,6 +159,7 @@ pub struct TransactionResponse {
 
 impl From<TransactionWithData> for TransactionResponseData {
     fn from(tx: TransactionWithData) -> Self {
+        let tx_hash: QubicTxHash = tx.clone().into();
         Self {
             source_id: tx.raw_transaction.from.to_string(),
             dest_id: tx.raw_transaction.to.to_string(),
@@ -162,19 +169,19 @@ impl From<TransactionWithData> for TransactionResponseData {
             input_size: tx.raw_transaction.input_size,
             input_hex: hex::encode(tx.data.to_bytes()),
             signature_hex: tx.signature.to_string(),
-            tx_id: "".to_string(), // TODO: find tx id
+            tx_id: tx_hash.get_identity(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum APIStatus {
     Ok,
     Error,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RPCStatus {
     /// Server status: `"ok"` if healthy, `"error"` otherwise
@@ -185,34 +192,34 @@ pub struct RPCStatus {
     pub version: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastProcessedTick {
     pub tick_number: u64,
     pub epoch: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkippedTick {
     pub start_tick: u64,
     pub end_tick: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessedTickIntervalPerEpoch {
     pub epoch: u64,
     pub intervals: Vec<TickInterval>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TickInterval {
     pub initial_processed_tick: u64,
     pub last_processed_tick: u64,
 }
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferResponse {
     pub transfer_transactions_per_tick: Vec<TickTransactions>,
@@ -226,7 +233,7 @@ impl TransferResponse {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TickTransactions {
     pub tick_number: u32,

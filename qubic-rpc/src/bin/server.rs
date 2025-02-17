@@ -1,23 +1,23 @@
-use clap::Parser;
 use std::sync::Arc;
-use tokio::net::TcpListener;
 
-use qubic_rpc::{qubic_rpc_router_v2, RPCState};
+use clap::Parser;
 
-#[macro_use]
-extern crate log;
+use qubic_rpc::spawn_server;
 
 #[derive(Debug, Parser)]
 pub struct Args {
     /// Binds server to provided port
     #[arg(short, long, default_value = "2003")]
-    pub port: String,
+    pub port: u32,
 
     /// Computor IP to which send requests
     #[arg(short, long)]
     pub computor: String,
-}
 
+    /// Archiver database file
+    #[arg(short, long, default_value = "archiver-db")]
+    pub db_file: String,
+}
 #[tokio::main]
 async fn main() {
     env_logger::Builder::new()
@@ -27,16 +27,9 @@ async fn main() {
     let args = Arc::new(Args::parse());
 
     let computor_address = format!("{}:21841", args.computor);
-    let state = Arc::new(RPCState::new(computor_address));
+    let (archiver_handle, server_handle) =
+        spawn_server(args.port, computor_address, args.db_file.clone()).await;
 
-    let routes = qubic_rpc_router_v2(state.clone());
-
-    info!("Binding server to port {}", args.port);
-    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", args.port))
-        .await
-        .unwrap();
-
-    axum::serve(tcp_listener, routes.with_state(state))
-        .await
-        .unwrap();
+    let _ = tokio::join!(server_handle);
+    let _ = archiver_handle.join_all();
 }

@@ -5,32 +5,162 @@
 //! - This method
 //! ```rust,no_run
 //! ```
+use std::{sync::Arc, time::Instant};
 
+use async_channel::{Receiver, Sender};
 use axum::{
     http::Method,
     routing::{get, post},
     Router,
 };
-use std::{sync::Arc, time::Instant};
+use log::{debug, info};
+use sled::Db;
+use tokio::{
+    net::TcpListener,
+    task::{JoinHandle, JoinSet},
+};
 use tower_http::cors::{Any, CorsLayer};
+
+use qubic_rs::{
+    client::Client, qubic_tcp_types::types::transactions::TransactionFlags,
+    qubic_types::QubicTxHash, transport::Tcp,
+};
 
 pub mod qubic_rpc_types;
 pub mod routes;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RPCState {
-    computor_address: String,
+    db: Arc<Db>,
+    client: Arc<Client<Tcp>>,
     start_time: Instant,
 }
 
 impl RPCState {
-    pub fn new(computor_address: String) -> Self {
+    pub fn new(db: Arc<Db>, client: Arc<Client<Tcp>>) -> Self {
         let start_time = Instant::now();
         Self {
-            computor_address,
+            db,
+            client,
             start_time,
         }
     }
+}
+
+/// Producer puts ticks into a channel for processing.
+/// Produces 10 ticks backwards and then checks for new ticks
+/// (e.g. from 1010 it will add 1009 to 999 and then check to see where the network is at,
+/// if it is at 1012, it'll add 1011 and 1012)
+async fn archiver_producer(tx: Sender<u32>, client: Arc<Client<Tcp>>) {
+    let current_tick = client
+        .qu()
+        .get_current_tick_info()
+        .await
+        .expect("Could not get current tick")
+        .tick;
+
+    if let Err(_) = tx.send(current_tick).await {
+        eprintln!("Receiver dropped, stopping producer.");
+        return;
+    }
+
+    let mut latest_viewed_tick = current_tick;
+    let mut earliest_viewed_tick = current_tick;
+    loop {
+        // add 10 ticks backwards
+        if earliest_viewed_tick > 0 {
+            for i in 1..=10 {
+                let new_tick = earliest_viewed_tick.saturating_sub(i);
+                if let Err(_) = tx.send(new_tick).await {
+                    eprintln!("Receiver dropped, stopping producer.");
+                    return;
+                }
+                earliest_viewed_tick = new_tick;
+            }
+        }
+
+        // check for forward ticks
+        let current_tick = client
+            .qu()
+            .get_current_tick_info()
+            .await
+            .expect("Could not get current tick")
+            .tick;
+
+        // add all ticks between current and latest_viewed_tick
+        for tick in (latest_viewed_tick + 1)..=current_tick {
+            if let Err(_) = tx.send(tick).await {
+                eprintln!("Receiver dropped, stopping producer.");
+                return;
+            }
+        }
+        latest_viewed_tick = current_tick;
+
+        // wait not to overload channel with mostly older ticks
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+}
+
+async fn archiver_consumer(id: usize, rx: Receiver<u32>, db: Arc<Db>, client: Arc<Client<Tcp>>) {
+    while let Ok(tick) = rx.recv().await {
+        let tick_transactions = client
+            .qu()
+            .request_tick_transactions(tick, TransactionFlags::all())
+            .await
+            .expect("Could not get transactions for tick {tick}");
+
+        for tx in tick_transactions {
+            let serialized = bincode::serialize(&tx).unwrap();
+            let tx_hash: QubicTxHash = tx.into();
+            let tx_id = tx_hash.get_identity();
+
+            db.insert(tx_id, serialized).unwrap();
+        }
+        debug!("Consumer {} processed tick {}", id, tick);
+    }
+}
+
+pub async fn spawn_server(
+    port: u32,
+    computor_address: String,
+    db_file: String,
+) -> (JoinSet<()>, JoinHandle<()>) {
+    let db = Arc::new(sled::open(db_file).expect("Failed to open DB"));
+    let client = Arc::new(
+        Client::<Tcp>::new(&computor_address)
+            .await
+            .expect("Failed to create qubic client"),
+    );
+    let state = Arc::new(RPCState::new(db.clone(), client.clone()));
+
+    let mut archiver_handles = JoinSet::new();
+
+    // spawn producer (sends ticks) and consumers (fetch tick transactions) for archiver
+    let (tx, rx) = async_channel::unbounded();
+    archiver_handles.spawn(archiver_producer(tx, client.clone()));
+    for client_id in 0..4 {
+        let rx_clone = rx.clone();
+        let db_clone = db.clone();
+        let client_clone = client.clone();
+        archiver_handles.spawn(async move {
+            archiver_consumer(client_id, rx_clone, db_clone, client_clone).await;
+        });
+    }
+
+    let routes = qubic_rpc_router_v2(state.clone());
+
+    info!("Binding server to port {}", port);
+    let tcp_listener = TcpListener::bind(&format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
+
+    let server_handle = tokio::spawn(async move {
+        axum::serve(tcp_listener, routes.with_state(state))
+            .await
+            .unwrap();
+    });
+
+    (archiver_handles, server_handle)
 }
 
 pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {
@@ -40,9 +170,10 @@ pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {
         .allow_headers(Any);
 
     let ticks_router = Router::new()
+        .route("/{tick}/transactions", get(routes::tick_transactions))
         .route(
             "/{tick}/approved-transactions",
-            get(routes::approved_transactions_for_tick),
+            get(routes::approved_tick_transactions),
         )
         .route("/{tick}/tick-data", get(routes::tick_data))
         .route("/{tick}/chain-hash", get(routes::chain_hash))
@@ -83,6 +214,7 @@ pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {
         .with_state(state)
 }
 
+#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -92,33 +224,46 @@ mod tests {
     use http::{Method, Request, StatusCode};
     use http_body_util::BodyExt;
     use serde_json::json;
-    use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready` // for `collect`
+    use tower::ServiceExt; // for `call`, `oneshot`, and `ready` // for `collect`
 
     use qubic_rs::{
+        client::Client,
         qubic_tcp_types::types::{
-            contracts::ResponseContractFunction,
-            ticks::CurrentTickInfo,
-            transactions::{RequestedTickTransactions, TransactionWithData},
+            contracts::ResponseContractFunction, transactions::TransactionWithData,
         },
         qubic_types::{
             traits::{Sign, ToBytes},
             QubicWallet,
         },
+        transport::Tcp,
     };
 
     use crate::{
         qubic_rpc_router_v2,
-        qubic_rpc_types::{
-            APIStatus, LatestTick, RPCStatus, TransactionResponse, TransferResponse, WalletBalance,
-        },
+        qubic_rpc_types::{APIStatus, LatestTick, RPCStatus, TransferResponse, WalletBalance},
         RPCState,
     };
 
     const COMPUTOR_ADDRESS: &str = "66.23.193.243:21841";
 
+    async fn setup() -> Arc<RPCState> {
+        let db = Arc::new(
+            sled::Config::new()
+                .temporary(true)
+                .open()
+                .expect("Failed to open DB"),
+        );
+        let client = Arc::new(
+            Client::<Tcp>::new(&COMPUTOR_ADDRESS)
+                .await
+                .expect("Failed to create qubic client"),
+        );
+        Arc::new(RPCState::new(db, client))
+    }
+
     #[tokio::test]
     async fn get_index() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
         let response = app
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
@@ -135,7 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn latest_tick() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
         let response = app
             .oneshot(
@@ -158,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn broadcast_transaction() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
 
         let wallet =
@@ -192,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn wallet_balance() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
 
         let wallet = "MGPAJNYEIENVTAQXEBARMUADANKBOOWIETOVESQIDCFFVZOVHLFBYIKDWITM";
@@ -232,7 +377,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_check() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
 
         let response = app
@@ -254,50 +399,9 @@ mod tests {
         assert_eq!(actual.status, APIStatus::Ok);
     }
 
-    // #[tokio::test]
-    // async fn transaction() {
-    //     let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
-    //     let app = qubic_rpc_router_v2(state.clone());
-
-    //     let tx_id = "rlinciclnsqteajcanbecoedphdftskhikawqvedkfzbmiclqqnpgoagsbpb";
-
-    //     let response = app
-    //         .oneshot(
-    //             Request::builder()
-    //                 .uri(format!("/transactions/{tx_id}"))
-    //                 .body(Body::empty())
-    //                 .unwrap(),
-    //         )
-    //         .await
-    //         .unwrap();
-    //     dbg!(&response);
-
-    //     assert_eq!(response.status(), StatusCode::OK);
-
-    //     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
-    //     let actual: TransactionResponse = serde_json::from_slice(&body_bytes).unwrap();
-
-    //     let expected: TransactionResponse = serde_json::from_value(json!({
-    //       "transaction": {
-    //         "sourceId": "FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ",
-    //         "destId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB",
-    //         "amount": "1000000",
-    //         "tickNumber": 17767809,
-    //         "inputType": 2,
-    //         "inputSize": 64,
-    //         "inputHex": "72c56a241b10e5c982bffa7368e7280a046785e1fb659610df3c03f4508d420f716c692b637564618b025950bc2b53a778644261ade91a22c85ef752da7ee162",
-    //         "signatureHex": "8ecb184c3da2dc9ee673189590846f3dea8877ad72eb04dec0be1e36791436c5b9254fd7dbe2c44352a20bed3b01973d8974320cf4a8f99c45eb662410f81300",
-    //         "txId": "rlinciclnsqteajcanbecoedphdftskhikawqvedkfzbmiclqqnpgoagsbpb"
-    //       }
-    //     }
-    //     )).unwrap();
-
-    //     assert_eq!(expected, actual);
-    // }
-
     #[tokio::test]
     async fn transfer_transactions_per_tick() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
 
         let wallet_id = "FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ";
@@ -329,12 +433,12 @@ mod tests {
 
     #[tokio::test]
     async fn transfers() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
 
         let wallet_id = "FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ";
         let start_tick = 19385438;
-        let end_tick = 19386228;
+        let end_tick = 19385439;
 
         let response = app
             .oneshot(
@@ -370,23 +474,6 @@ mod tests {
                             "txId": "yhxstxyqmofoihqxpmjkzbhpkejecdnxtmqxkguimcduomifdftpewhefvri"
                         }
                     ]
-                },
-                {
-                    "tickNumber": 19386228,
-                    "identity": "FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ",
-                    "transactions": [
-                        {
-                            "sourceId": "FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ",
-                            "destId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB",
-                            "amount": "1000000",
-                            "tickNumber": 19386228,
-                            "inputType": 2,
-                            "inputSize": 64,
-                            "inputHex": "773d255d2eed904b11d4e885662662636715c7f9c87efd8ea8d5794f3c367244716c692b6375646194005972d0afe82cf85308ad47fbde3b7c6db1af526c16aa",
-                            "signatureHex": "da36f546ba5bfd200460421492aae121e78ceaa9d352c5b3efad84387a69285a7834d181f98ccfe97a292cf7fa9627a2774dc151865ab328c20636ea6a870800",
-                            "txId": "frvjiyacjnsnhhdpwnrhcxgucvjhhzwjovitxracuedxnarcpwxmejqdufhi"
-                        }
-                    ]
                 }
             ]
         })).unwrap();
@@ -396,7 +483,7 @@ mod tests {
 
     #[tokio::test]
     async fn query_sc() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
         let mut payload = HashMap::new();
         payload.insert("contractIndex", 1.to_string());
@@ -437,7 +524,7 @@ mod tests {
 
     #[tokio::test]
     async fn tick_info() {
-        let state = Arc::new(RPCState::new(COMPUTOR_ADDRESS.to_string()));
+        let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
 
         let response = app
