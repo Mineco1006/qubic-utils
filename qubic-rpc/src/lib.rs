@@ -240,7 +240,9 @@ mod tests {
 
     use crate::{
         qubic_rpc_router_v2,
-        qubic_rpc_types::{APIStatus, LatestTick, RPCStatus, TransferResponse, WalletBalance},
+        qubic_rpc_types::{
+            APIStatus, ComputorsResponse, LatestTick, RPCStatus, TransferResponse, WalletBalance,
+        },
         RPCState,
     };
 
@@ -400,6 +402,147 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn computors() {
+        let state = setup().await;
+        let app = qubic_rpc_router_v2(state.clone());
+        let epoch = 1; // some dummy epoch, endpoint ignores it
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/epochs/{epoch}/computors"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let actual: ComputorsResponse = serde_json::from_slice(&body_bytes).unwrap();
+
+        assert!(actual.computors.identities.len() > 0);
+    }
+
+    #[tokio::test]
+    async fn query_sc() {
+        let state = setup().await;
+        let app = qubic_rpc_router_v2(state.clone());
+        let mut payload = HashMap::new();
+        payload.insert("contractIndex", 1.to_string());
+        payload.insert("inputType", 1.to_string());
+        payload.insert("inputSize", 0.to_string());
+        payload.insert(
+            "requestData",
+            base64::engine::general_purpose::STANDARD.encode("".as_bytes()),
+        );
+        let json_payload = serde_json::to_string(&payload).unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/querySmartContract")
+                    .header("Content-Type", "application/json")
+                    .method(Method::POST)
+                    .body(Body::from(json_payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let actual: ResponseContractFunction = serde_json::from_slice(&body_bytes).unwrap();
+
+        let expected = ResponseContractFunction {
+            output: base64::engine::general_purpose::STANDARD
+                .decode("AMqaO2QAAADAxi0A")
+                .unwrap(),
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn tick_info() {
+        let state = setup().await;
+        let app = qubic_rpc_router_v2(state.clone());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/tick-info"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn block_height() {
+        let state = setup().await;
+        let app = qubic_rpc_router_v2(state.clone());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/block-height"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn latest_stats() {
+        let state = setup().await;
+        let app = qubic_rpc_router_v2(state.clone());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/latest-stats"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn rich_list() {
+        let state = setup().await;
+        let app = qubic_rpc_router_v2(state.clone());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/rich-list"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn transfer_transactions_per_tick() {
         let state = setup().await;
         let app = qubic_rpc_router_v2(state.clone());
@@ -479,65 +622,5 @@ mod tests {
         })).unwrap();
 
         assert_eq!(expected, actual);
-    }
-
-    #[tokio::test]
-    async fn query_sc() {
-        let state = setup().await;
-        let app = qubic_rpc_router_v2(state.clone());
-        let mut payload = HashMap::new();
-        payload.insert("contractIndex", 1.to_string());
-        payload.insert("inputType", 1.to_string());
-        payload.insert("inputSize", 0.to_string());
-        payload.insert(
-            "requestData",
-            base64::engine::general_purpose::STANDARD.encode("".as_bytes()),
-        );
-        let json_payload = serde_json::to_string(&payload).unwrap();
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/querySmartContract")
-                    .header("Content-Type", "application/json")
-                    .method(Method::POST)
-                    .body(Body::from(json_payload))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        dbg!(&response);
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
-        let actual: ResponseContractFunction = serde_json::from_slice(&body_bytes).unwrap();
-
-        let expected = ResponseContractFunction {
-            output: base64::engine::general_purpose::STANDARD
-                .decode("AMqaO2QAAADAxi0A")
-                .unwrap(),
-        };
-
-        assert_eq!(actual, expected);
-    }
-
-    #[tokio::test]
-    async fn tick_info() {
-        let state = setup().await;
-        let app = qubic_rpc_router_v2(state.clone());
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/tick-info"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        dbg!(&response);
-
-        assert_eq!(response.status(), StatusCode::OK);
     }
 }

@@ -14,9 +14,9 @@ use std::{fmt, str::FromStr, sync::Arc};
 
 use crate::{
     qubic_rpc_types::{
-        APIStatus, Balance, BroadcastTransactionPayload, LatestTick, QubicRpcError, RPCStatus,
-        RequestSCPayload, TickTransactions, TransactionResponse, TransactionsResponse,
-        TransferResponse, WalletBalance,
+        APIStatus, Balance, BroadcastTransactionPayload, ComputorsResponse, LatestTick,
+        QubicRpcError, RPCStatus, RequestSCPayload, TickTransactions, TransactionResponse,
+        TransactionsResponse, TransferResponse, WalletBalance,
     },
     RPCState,
 };
@@ -173,10 +173,13 @@ pub async fn health_check(
     }))
 }
 pub async fn computors(
-    State(_state): State<Arc<RPCState>>,
-    Path(_epoch): Path<u32>,
+    State(state): State<Arc<RPCState>>,
+    Path(_epoch): Path<u32>, // ignore epoch for now, request_computors only returns for one epoch
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+    let computors = state.client.qu().request_computors().await?;
+    Ok(Json(ComputorsResponse {
+        computors: computors.into(),
+    }))
 }
 pub async fn query_sc(
     State(state): State<Arc<RPCState>>,

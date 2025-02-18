@@ -8,10 +8,16 @@ use qubic_rs::{
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputorsResponse {
+    pub computors: ComputorInfos,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputorInfos {
     pub epoch: u16,
-    pub ids: Vec<QubicId>,
+    pub identities: Vec<QubicId>,
     pub signature: Signature,
 }
 
@@ -19,7 +25,7 @@ impl From<Computors> for ComputorInfos {
     fn from(value: Computors) -> Self {
         ComputorInfos {
             epoch: value.epoch,
-            ids: value.public_key.to_vec(),
+            identities: value.public_key.to_vec(),
             signature: value.signature,
         }
     }
