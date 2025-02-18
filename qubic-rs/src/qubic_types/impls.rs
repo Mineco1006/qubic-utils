@@ -640,7 +640,7 @@ impl Display for Signature {
         let mut hex_slice = [0; 128];
         hex::encode_to_slice(self.0, &mut hex_slice).unwrap();
         f.write_str(&format!(
-            "0x{}",
+            "{}",
             String::from_utf8(hex_slice.to_vec()).unwrap()
         ))
     }
