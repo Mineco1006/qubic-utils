@@ -14,9 +14,9 @@ pub struct Args {
     #[arg(short, long)]
     pub computor: String,
 
-    /// Archiver database file
+    /// Archiver database directory
     #[arg(short, long, default_value = "archiver-db")]
-    pub db_file: String,
+    pub db_dir: String,
 }
 #[tokio::main]
 async fn main() {
@@ -27,8 +27,8 @@ async fn main() {
     let args = Arc::new(Args::parse());
 
     let computor_address = format!("{}:21841", args.computor);
-    let (archiver_handle, server_handle) =
-        spawn_server(args.port, computor_address, args.db_file.clone()).await;
+    let (_db, archiver_handle, server_handle) =
+        spawn_server(args.port, computor_address, args.db_dir.clone()).await;
 
     let _ = tokio::join!(server_handle);
     let _ = archiver_handle.join_all();

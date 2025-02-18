@@ -157,6 +157,14 @@ pub struct TransactionsResponse {
     pub money_flew: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionResponse {
+    pub transaction: TransactionResponseData,
+    pub timestamp: String,
+    pub money_flew: bool,
+}
+
 impl From<TransactionWithData> for TransactionResponseData {
     fn from(tx: TransactionWithData) -> Self {
         let tx_hash: QubicTxHash = tx.clone().into();

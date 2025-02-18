@@ -123,9 +123,9 @@ async fn archiver_consumer(id: usize, rx: Receiver<u32>, db: Arc<Db>, client: Ar
 pub async fn spawn_server(
     port: u32,
     computor_address: String,
-    db_file: String,
-) -> (JoinSet<()>, JoinHandle<()>) {
-    let db = Arc::new(sled::open(db_file).expect("Failed to open DB"));
+    db_dir: String,
+) -> (Arc<Db>, JoinSet<()>, JoinHandle<()>) {
+    let db = Arc::new(sled::open(db_dir).expect("Failed to open DB"));
     let client = Arc::new(
         Client::<Tcp>::new(&computor_address)
             .await
@@ -160,7 +160,7 @@ pub async fn spawn_server(
             .unwrap();
     });
 
-    (archiver_handles, server_handle)
+    (db.clone(), archiver_handles, server_handle)
 }
 
 pub fn qubic_rpc_router_v2<S>(state: Arc<RPCState>) -> Router<S> {

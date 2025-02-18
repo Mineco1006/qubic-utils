@@ -6,8 +6,8 @@ use axum::{
 };
 use base64::Engine;
 use qubic_rs::{
-    qubic_tcp_types::types::transactions::{Transaction, TransactionFlags},
-    qubic_types::{traits::FromBytes, QubicId, QubicTxHash},
+    qubic_tcp_types::types::transactions::{Transaction, TransactionFlags, TransactionWithData},
+    qubic_types::{traits::FromBytes, QubicId},
 };
 use serde::{de, Deserialize, Deserializer};
 use std::{fmt, str::FromStr, sync::Arc};
@@ -15,7 +15,8 @@ use std::{fmt, str::FromStr, sync::Arc};
 use crate::{
     qubic_rpc_types::{
         APIStatus, Balance, BroadcastTransactionPayload, LatestTick, QubicRpcError, RPCStatus,
-        RequestSCPayload, TickTransactions, TransferResponse, WalletBalance,
+        RequestSCPayload, TickTransactions, TransactionResponse, TransactionsResponse,
+        TransferResponse, WalletBalance,
     },
     RPCState,
 };
@@ -56,10 +57,20 @@ pub async fn status(Path(_id): Path<QubicId>) -> Result<impl IntoResponse, Qubic
 
 /// Returns information for a given transaction
 pub async fn transaction(
-    State(_state): State<Arc<RPCState>>,
-    Path(_id): Path<QubicTxHash>,
+    State(state): State<Arc<RPCState>>,
+    Path(tx_id): Path<String>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+    if let Some(value) = state.db.get(tx_id)? {
+        let tx: TransactionWithData = bincode::deserialize(&value).unwrap();
+        let tx_resp = TransactionResponse {
+            transaction: tx.into(),
+            timestamp: 0.to_string(), // TODO: get timestamp
+            money_flew: false,        // TODO: get money_flew
+        };
+        Ok(Json(tx_resp))
+    } else {
+        Err(anyhow!("Transaction not found").into())
+    }
 }
 
 /// Returns the same information as `/transactions/{tx_id}`
@@ -125,7 +136,7 @@ pub async fn transfers(
         return Err(anyhow!("tick range too big").into());
     }
 
-    let mut resp = TransferResponse::new();
+    let mut transfer_resp = TransferResponse::new();
 
     // TODO: support sc_only, desc
     for tick in start_tick..end_tick + 1 {
@@ -144,10 +155,12 @@ pub async fn transfers(
                 identity: id.to_string(),
                 transactions: tick_transactions.into_iter().map(Into::into).collect(),
             };
-            resp.transfer_transactions_per_tick.push(tick_transactions);
+            transfer_resp
+                .transfer_transactions_per_tick
+                .push(tick_transactions);
         }
     }
-    Ok(Json(resp))
+    Ok(Json(transfer_resp))
 }
 /// Returns general health information about RPC server
 pub async fn health_check(
@@ -197,8 +210,25 @@ pub async fn rich_list() -> Result<impl IntoResponse, QubicRpcError> {
 }
 
 /// Returns all transactions for a specific tick (block height)
-pub async fn tick_transactions(Path(_tick): Path<u32>) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+pub async fn tick_transactions(
+    State(state): State<Arc<RPCState>>,
+    Path(tick): Path<u32>,
+) -> Result<impl IntoResponse, QubicRpcError> {
+    let flags = TransactionFlags::all();
+    let tick_txs = TransactionsResponse {
+        transactions: state
+            .client
+            .qu()
+            .request_tick_transactions(tick, flags)
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+        timestamp: 0.to_string(), // TODO: get timestamp
+        money_flew: false,        // TODO: get money_flew
+    };
+
+    Ok(Json(tick_txs))
 }
 /// Returns the approved transactions for a specific tick (block height)
 pub async fn approved_tick_transactions(
