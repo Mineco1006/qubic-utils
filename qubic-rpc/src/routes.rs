@@ -14,9 +14,10 @@ use std::{fmt, str::FromStr, sync::Arc};
 
 use crate::{
     qubic_rpc_types::{
-        APIStatus, Balance, BroadcastTransactionPayload, ComputorsResponse, LatestTick,
-        QubicRpcError, RPCStatus, RequestSCPayload, TickTransactions, TransactionResponse,
-        TransactionsResponse, TransferResponse, WalletBalance,
+        APIStatus, Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload,
+        ComputorsResponse, LatestTick, QubicRpcError, RPCStatus, RequestSCPayload,
+        TickInfoResponse, TickTransactions, TransactionResponse, TransactionsResponse,
+        TransferResponse, WalletBalance,
     },
     RPCState,
 };
@@ -139,7 +140,7 @@ pub async fn transfers(
     let mut transfer_resp = TransferResponse::new();
 
     // TODO: support sc_only, desc
-    for tick in start_tick..end_tick + 1 {
+    for tick in start_tick..=end_tick {
         let tick_transactions = state
             .client
             .qu()
@@ -200,16 +201,60 @@ pub async fn query_sc(
 pub async fn tick_info(
     State(state): State<Arc<RPCState>>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(state.client.qu().get_current_tick_info().await?))
+    let tick_info = state.client.qu().get_current_tick_info().await?;
+    Ok(Json(TickInfoResponse { tick_info }))
 }
-pub async fn block_height() -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+pub async fn block_height(
+    State(state): State<Arc<RPCState>>,
+) -> Result<impl IntoResponse, QubicRpcError> {
+    let tick_info = state.client.qu().get_current_tick_info().await?;
+
+    let block_height = BlockHeight {
+        tick: tick_info.tick,
+        duration: tick_info.tick_duration,
+        epoch: tick_info.epoch,
+        initial_tick: tick_info.initial_tick,
+    };
+    Ok(Json(BlockHeightResponse { block_height }))
 }
 pub async fn latest_stats() -> Result<impl IntoResponse, QubicRpcError> {
     Ok(Json(""))
 }
-pub async fn rich_list() -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+
+#[derive(Debug, Deserialize)]
+struct PaginationParams {
+    page: Option<u32>,
+    page_size: Option<u32>,
+}
+
+pub async fn rich_list(
+    State(state): State<Arc<RPCState>>,
+    Query(params): Query<PaginationParams>
+) -> Result<impl IntoResponse, QubicRpcError> {
+    let page = params.page.unwrap_or(1);
+    let page_size = params.page_size.unwrap_or(10);
+
+    if page < 1 || page_size < 1 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "page and page_size must be positive integers".to_string(),
+        ));
+    }
+    // TODO: get rich list
+    // TODO: if page > total_pages || page_size > MAX_PAGE_SIZE {}
+
+    let rich_list_response = RichListResponse {
+        pagination: Pagination {
+            total_records,
+            total_pages,
+            state.current_page,
+        },
+        epoch,
+        rich_list: RichList{
+            entities: selected_rich,
+        }
+    };
+    Ok(Json(rich_list_response))
 }
 
 /// Returns all transactions for a specific tick (block height)

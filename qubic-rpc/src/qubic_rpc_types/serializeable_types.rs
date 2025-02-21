@@ -254,3 +254,77 @@ pub struct TickTransactions {
     pub identity: String,
     pub transactions: Vec<TransactionResponseData>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockHeight {
+    pub tick: u32,
+    pub duration: u16,
+    pub epoch: u16,
+    pub initial_tick: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockHeightResponse {
+    pub block_height: BlockHeight,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TickInfoResponse {
+    pub tick_info: CurrentTickInfo,
+}
+
+// cannot implement Eq because of f64
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestStats {
+    timestamp: String,
+    circulating_supply: String,
+    active_addresses: u32,
+    price: f64,
+    market_cap: String,
+    epoch: u32,
+    current_tick: u32,
+    ticks_in_current_epoch: u32,
+    empty_ticks_in_current_epoch: u32,
+    epoch_tick_quality: f32,
+    burned_qus: String,
+}
+
+// cannot implement Eq because of f64
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestStatsResponse {
+    pub data: LatestStats,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pagination {
+    pub total_records: u64,
+    pub total_pages: u64,
+    pub current_page: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RichEntity {
+    identity: String,
+    balance: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RichList {
+    pub entities: Vec<RichEntity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RichListResponse {
+    pub pagination: Pagination,
+    pub epoch: u32,
+    pub rich_list: RichList,
+}

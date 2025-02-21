@@ -241,12 +241,13 @@ mod tests {
     use crate::{
         qubic_rpc_router_v2,
         qubic_rpc_types::{
-            APIStatus, ComputorsResponse, LatestTick, RPCStatus, TransferResponse, WalletBalance,
+            APIStatus, BlockHeightResponse, ComputorsResponse, LatestStatsResponse, LatestTick,
+            RPCStatus, RichListResponse, TickInfoResponse, TransferResponse, WalletBalance,
         },
         RPCState,
     };
 
-    const COMPUTOR_ADDRESS: &str = "66.23.193.243:21841";
+    const COMPUTOR_ADDRESS: &str = "45.152.160.17:21841";
 
     async fn setup() -> Arc<RPCState> {
         let db = Arc::new(
@@ -271,7 +272,6 @@ mod tests {
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
-        dbg!(&response);
 
         // should redirect to /healthcheck
         assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
@@ -293,7 +293,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -332,7 +331,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -353,7 +351,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         let expected: WalletBalance = serde_json::from_value(json!({"balance": {
             "id": "MGPAJNYEIENVTAQXEBARMUADANKBOOWIETOVESQIDCFFVZOVHLFBYIKDWITM",
@@ -391,7 +388,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -415,7 +411,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -450,7 +445,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -480,9 +474,16 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
+
+        // check if response has correct fields
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let actual: TickInfoResponse = serde_json::from_slice(&body_bytes).unwrap();
+
+        assert!(actual.tick_info.epoch > 0);
+        assert!(actual.tick_info.tick > 0);
+        assert!(actual.tick_info.initial_tick > 0);
     }
 
     #[tokio::test]
@@ -499,9 +500,16 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
+
+        // check if response has correct fields
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let actual: BlockHeightResponse = serde_json::from_slice(&body_bytes).unwrap();
+
+        assert!(actual.block_height.tick > 0);
+        assert!(actual.block_height.epoch > 0);
+        assert!(actual.block_height.initial_tick > 0);
     }
 
     #[tokio::test]
@@ -518,9 +526,17 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
+
+        // check if response has correct fields
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let actual: LatestStatsResponse = serde_json::from_slice(&body_bytes).unwrap();
+
+        assert!(false);
+        // assert!(actual.block_height.tick > 0);
+        // assert!(actual.block_height.epoch > 0);
+        // assert!(actual.block_height.initial_tick > 0);
     }
 
     #[tokio::test]
@@ -537,9 +553,12 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         assert_eq!(response.status(), StatusCode::OK);
+
+        // check if response has correct fields
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let actual: RichListResponse = serde_json::from_slice(&body_bytes).unwrap();
     }
 
     #[tokio::test]
@@ -560,7 +579,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         // should redirect to /identities/{identity}/transfers
         assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
@@ -592,7 +610,6 @@ mod tests {
             )
             .await
             .unwrap();
-        dbg!(&response);
 
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let actual: TransferResponse = serde_json::from_slice(&body_bytes).unwrap_or_else(|e| {
