@@ -7,15 +7,18 @@ use axum::{
     Json,
 };
 use base64::Engine;
+use chrono::Utc;
+use num_bigint::BigUint;
 use serde::{de, Deserialize, Deserializer};
 
 use crate::{
-    archiver,
+    archiver::{self, WalletEntry},
     qubic_rpc_types::{
         APIStatus, Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload,
-        ComputorsResponse, LatestTick, Pagination, QubicRpcError, RPCStatus, RequestSCPayload,
-        RichList, RichListResponse, TickInfoResponse, TickTransactions, TransactionResponse,
-        TransactionsResponse, TransferResponse, WalletBalance,
+        ComputorsResponse, LatestStats, LatestStatsResponse, LatestTick, Pagination, QubicRpcError,
+        RPCStatus, RequestSCPayload, RichList, RichListResponse, TickInfoResponse,
+        TickTransactions, TransactionResponse, TransactionsResponse, TransferResponse,
+        WalletBalance,
     },
     RPCState,
 };
@@ -219,8 +222,36 @@ pub async fn block_height(
     };
     Ok(Json(BlockHeightResponse { block_height }))
 }
-pub async fn latest_stats() -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(""))
+pub async fn latest_stats(
+    State(state): State<Arc<RPCState>>,
+) -> Result<impl IntoResponse, QubicRpcError> {
+    let sys_info = state.client.qu().request_system_info().await?;
+
+    let wallets_tree: sled::Tree = state.db.open_tree("wallets")?;
+    let circulating_supply = wallets_tree
+        .iter()
+        .filter_map(|res| res.ok()) // ignore errors
+        .filter_map(|(_, value)| bincode::deserialize::<WalletEntry>(&value).ok())
+        .filter_map(|wallet| wallet.balance.parse::<BigUint>().ok()) // convert balance to BigUint
+        .fold(BigUint::ZERO, |acc, x| acc + x);
+
+    let ticks_in_current_epoch = sys_info.latest_created_tick - sys_info.initial_tick;
+    let empty_ticks_in_current_epoch: u32 = 0; // TODO
+
+    let data = LatestStats {
+        timestamp: Utc::now().timestamp().to_string(),
+        circulating_supply: circulating_supply.to_string(),
+        active_addresses: wallets_tree.len().try_into()?,
+        price: 0.0,                 // TODO
+        market_cap: "".to_string(), // TODO
+        epoch: sys_info.epoch,
+        current_tick: sys_info.tick,
+        ticks_in_current_epoch,
+        empty_ticks_in_current_epoch,
+        epoch_tick_quality: empty_ticks_in_current_epoch as f32 / ticks_in_current_epoch as f32,
+        burned_qus: "".to_string(), // TODO
+    };
+    Ok(Json(LatestStatsResponse { data }))
 }
 
 #[derive(Debug, Deserialize)]

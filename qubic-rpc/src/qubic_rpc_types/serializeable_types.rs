@@ -280,17 +280,17 @@ pub struct TickInfoResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LatestStats {
-    timestamp: String,
-    circulating_supply: String,
-    active_addresses: u32,
-    price: f64,
-    market_cap: String,
-    epoch: u32,
-    current_tick: u32,
-    ticks_in_current_epoch: u32,
-    empty_ticks_in_current_epoch: u32,
-    epoch_tick_quality: f32,
-    burned_qus: String,
+    pub timestamp: String,
+    pub circulating_supply: String,
+    pub active_addresses: u32,
+    pub price: f64,
+    pub market_cap: String,
+    pub epoch: u16,
+    pub current_tick: u32,
+    pub ticks_in_current_epoch: u32,
+    pub empty_ticks_in_current_epoch: u32,
+    pub epoch_tick_quality: f32,
+    pub burned_qus: String,
 }
 
 // cannot implement Eq because of f64

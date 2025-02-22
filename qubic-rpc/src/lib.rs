@@ -171,7 +171,7 @@ mod tests {
         RPCState,
     };
 
-    const COMPUTOR_ADDRESS: &str = "45.152.160.17:21841";
+    const COMPUTOR_ADDRESS: &str = "178.237.58.210:21841";
 
     async fn setup() -> Arc<RPCState> {
         let db = Arc::new(
@@ -457,10 +457,16 @@ mod tests {
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let actual: LatestStatsResponse = serde_json::from_slice(&body_bytes).unwrap();
 
-        assert!(false);
-        // assert!(actual.block_height.tick > 0);
-        // assert!(actual.block_height.epoch > 0);
-        // assert!(actual.block_height.initial_tick > 0);
+        assert!(actual.data.timestamp.len() > 0);
+        assert!(actual.data.circulating_supply.len() > 0);
+        // ignore active addresses (wallets.len())
+        assert!(actual.data.price > 0.0);
+        assert!(actual.data.market_cap.len() > 0);
+        assert!(actual.data.epoch > 0);
+        assert!(actual.data.current_tick > 0);
+        assert!(actual.data.ticks_in_current_epoch > 0);
+        // ignore empty_ticks_in_current_epoch (could be anything)
+        // ignore burned_qus (could be anything)
     }
 
     #[tokio::test]

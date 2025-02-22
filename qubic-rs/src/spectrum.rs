@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use anyhow::Result;
 use qubic_rs::qubic_tcp_types::types::Entity;
 use qubic_rs::qubic_types::QubicId;
