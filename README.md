@@ -13,6 +13,7 @@ Running tests
 cd qubic-rpc
 cargo test
 ```
+**Important:** If most of the tests are hanging, it is very likely that the computer being used is offline, please go to the [network explorer](https://app.qubic.li/) to find another peer and copy its IP address into the `mod tests` of `qubic-rpc/src/lib.rs`.
 
 ## qubic-rs
 
