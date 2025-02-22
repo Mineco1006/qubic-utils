@@ -303,16 +303,16 @@ pub struct LatestStatsResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pagination {
-    pub total_records: u64,
-    pub total_pages: u64,
-    pub current_page: u32,
+    pub total_records: usize,
+    pub total_pages: usize,
+    pub current_page: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RichEntity {
-    identity: String,
-    balance: String,
+    pub identity: String,
+    pub balance: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -325,6 +325,6 @@ pub struct RichList {
 #[serde(rename_all = "camelCase")]
 pub struct RichListResponse {
     pub pagination: Pagination,
-    pub epoch: u32,
+    pub epoch: u16,
     pub rich_list: RichList,
 }

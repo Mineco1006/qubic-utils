@@ -7,13 +7,12 @@
 //! ```
 use std::{sync::Arc, time::Instant};
 
-use async_channel::{Receiver, Sender};
 use axum::{
     http::Method,
     routing::{get, post},
     Router,
 };
-use log::{debug, info};
+use log::info;
 use sled::Db;
 use tokio::{
     net::TcpListener,
@@ -21,11 +20,9 @@ use tokio::{
 };
 use tower_http::cors::{Any, CorsLayer};
 
-use qubic_rs::{
-    client::Client, qubic_tcp_types::types::transactions::TransactionFlags,
-    qubic_types::QubicTxHash, transport::Tcp,
-};
+use qubic_rs::{client::Client, transport::Tcp};
 
+pub mod archiver;
 pub mod qubic_rpc_types;
 pub mod routes;
 
@@ -47,79 +44,6 @@ impl RPCState {
     }
 }
 
-/// Producer puts ticks into a channel for processing.
-/// Produces 10 ticks backwards and then checks for new ticks
-/// (e.g. from 1010 it will add 1009 to 999 and then check to see where the network is at,
-/// if it is at 1012, it'll add 1011 and 1012)
-async fn archiver_producer(tx: Sender<u32>, client: Arc<Client<Tcp>>) {
-    let current_tick = client
-        .qu()
-        .get_current_tick_info()
-        .await
-        .expect("Could not get current tick")
-        .tick;
-
-    if let Err(_) = tx.send(current_tick).await {
-        eprintln!("Receiver dropped, stopping producer.");
-        return;
-    }
-
-    let mut latest_viewed_tick = current_tick;
-    let mut earliest_viewed_tick = current_tick;
-    loop {
-        // add 10 ticks backwards
-        if earliest_viewed_tick > 0 {
-            for i in 1..=10 {
-                let new_tick = earliest_viewed_tick.saturating_sub(i);
-                if let Err(_) = tx.send(new_tick).await {
-                    eprintln!("Receiver dropped, stopping producer.");
-                    return;
-                }
-                earliest_viewed_tick = new_tick;
-            }
-        }
-
-        // check for forward ticks
-        let current_tick = client
-            .qu()
-            .get_current_tick_info()
-            .await
-            .expect("Could not get current tick")
-            .tick;
-
-        // add all ticks between current and latest_viewed_tick
-        for tick in (latest_viewed_tick + 1)..=current_tick {
-            if let Err(_) = tx.send(tick).await {
-                eprintln!("Receiver dropped, stopping producer.");
-                return;
-            }
-        }
-        latest_viewed_tick = current_tick;
-
-        // wait not to overload channel with mostly older ticks
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
-}
-
-async fn archiver_consumer(id: usize, rx: Receiver<u32>, db: Arc<Db>, client: Arc<Client<Tcp>>) {
-    while let Ok(tick) = rx.recv().await {
-        let tick_transactions = client
-            .qu()
-            .request_tick_transactions(tick, TransactionFlags::all())
-            .await
-            .expect("Could not get transactions for tick {tick}");
-
-        for tx in tick_transactions {
-            let serialized = bincode::serialize(&tx).unwrap();
-            let tx_hash: QubicTxHash = tx.into();
-            let tx_id = tx_hash.get_identity();
-
-            db.insert(tx_id, serialized).unwrap();
-        }
-        debug!("Consumer {} processed tick {}", id, tick);
-    }
-}
-
 pub async fn spawn_server(
     port: u32,
     computor_address: String,
@@ -137,13 +61,13 @@ pub async fn spawn_server(
 
     // spawn producer (sends ticks) and consumers (fetch tick transactions) for archiver
     let (tx, rx) = async_channel::unbounded();
-    archiver_handles.spawn(archiver_producer(tx, client.clone()));
+    archiver_handles.spawn(archiver::producer(tx, client.clone()));
     for client_id in 0..4 {
         let rx_clone = rx.clone();
         let db_clone = db.clone();
         let client_clone = client.clone();
         archiver_handles.spawn(async move {
-            archiver_consumer(client_id, rx_clone, db_clone, client_clone).await;
+            let _ = archiver::consumer(client_id, rx_clone, db_clone, client_clone).await;
         });
     }
 
@@ -242,7 +166,7 @@ mod tests {
         qubic_rpc_router_v2,
         qubic_rpc_types::{
             APIStatus, BlockHeightResponse, ComputorsResponse, LatestStatsResponse, LatestTick,
-            RPCStatus, RichListResponse, TickInfoResponse, TransferResponse, WalletBalance,
+            RPCStatus, TickInfoResponse, TransferResponse, WalletBalance,
         },
         RPCState,
     };
@@ -537,28 +461,6 @@ mod tests {
         // assert!(actual.block_height.tick > 0);
         // assert!(actual.block_height.epoch > 0);
         // assert!(actual.block_height.initial_tick > 0);
-    }
-
-    #[tokio::test]
-    async fn rich_list() {
-        let state = setup().await;
-        let app = qubic_rpc_router_v2(state.clone());
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/rich-list"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        // check if response has correct fields
-        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
-        let actual: RichListResponse = serde_json::from_slice(&body_bytes).unwrap();
     }
 
     #[tokio::test]

@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr, sync::Arc};
+
 use anyhow::anyhow;
 use axum::{
     extract::{OriginalUri, Path, Query, State},
@@ -5,27 +7,26 @@ use axum::{
     Json,
 };
 use base64::Engine;
+use serde::{de, Deserialize, Deserializer};
+
+use crate::{
+    archiver,
+    qubic_rpc_types::{
+        APIStatus, Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload,
+        ComputorsResponse, LatestTick, Pagination, QubicRpcError, RPCStatus, RequestSCPayload,
+        RichList, RichListResponse, TickInfoResponse, TickTransactions, TransactionResponse,
+        TransactionsResponse, TransferResponse, WalletBalance,
+    },
+    RPCState,
+};
 use qubic_rs::{
     qubic_tcp_types::types::transactions::{Transaction, TransactionFlags, TransactionWithData},
     qubic_types::{traits::FromBytes, QubicId},
-};
-use serde::{de, Deserialize, Deserializer};
-use std::{fmt, str::FromStr, sync::Arc};
-
-use crate::{
-    qubic_rpc_types::{
-        APIStatus, Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload,
-        ComputorsResponse, LatestTick, QubicRpcError, RPCStatus, RequestSCPayload,
-        TickInfoResponse, TickTransactions, TransactionResponse, TransactionsResponse,
-        TransferResponse, WalletBalance,
-    },
-    RPCState,
 };
 
 pub async fn index() -> impl IntoResponse {
     Redirect::permanent("/healthcheck")
 }
-#[axum::debug_handler]
 pub async fn latest_tick(
     State(state): State<Arc<RPCState>>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
@@ -61,8 +62,9 @@ pub async fn transaction(
     State(state): State<Arc<RPCState>>,
     Path(tx_id): Path<String>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    if let Some(value) = state.db.get(tx_id)? {
-        let tx: TransactionWithData = bincode::deserialize(&value).unwrap();
+    let tx_tree = state.db.open_tree("transactions")?;
+    if let Some(value) = tx_tree.get(tx_id)? {
+        let tx: TransactionWithData = bincode::deserialize(&value)?;
         let tx_resp = TransactionResponse {
             transaction: tx.into(),
             timestamp: 0.to_string(), // TODO: get timestamp
@@ -222,37 +224,54 @@ pub async fn latest_stats() -> Result<impl IntoResponse, QubicRpcError> {
 }
 
 #[derive(Debug, Deserialize)]
-struct PaginationParams {
-    page: Option<u32>,
-    page_size: Option<u32>,
+pub struct PaginationParams {
+    pub page: Option<usize>,
+    pub page_size: Option<usize>,
 }
 
+/// Returns list of wallets with highest recorded balances
+/// Uses pagination to return sensible amounts of wallets,
+/// if no `page` or `page_size` are passed in the query params
+/// 1 and 50 (respectively) are used.
 pub async fn rich_list(
     State(state): State<Arc<RPCState>>,
-    Query(params): Query<PaginationParams>
+    Query(params): Query<PaginationParams>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
     let page = params.page.unwrap_or(1);
-    let page_size = params.page_size.unwrap_or(10);
+    let page_size = params.page_size.unwrap_or(50);
 
-    if page < 1 || page_size < 1 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "page and page_size must be positive integers".to_string(),
-        ));
+    if page == 0 || page_size == 0 {
+        return Err(anyhow!("page and page_size must both be higher than zero").into());
     }
-    // TODO: get rich list
-    // TODO: if page > total_pages || page_size > MAX_PAGE_SIZE {}
 
+    let max_page_size = 200;
+    let total_records = archiver::rich_list_size(state.db.clone()).await;
+    if page_size > max_page_size {
+        return Err(anyhow!(format!("page_size must not be higher than {max_page_size}")).into());
+    }
+
+    let total_pages = total_records.div_ceil(page_size);
+    if page > total_pages {
+        return Err(anyhow!(format!(
+            "page must not be higher than total_pages ({total_pages})"
+        ))
+        .into());
+    }
+
+    let selected_rich =
+        archiver::rich_list((page - 1) * page_size, page_size, state.db.clone()).await?;
+
+    let tick_info = state.client.qu().get_current_tick_info().await?;
     let rich_list_response = RichListResponse {
         pagination: Pagination {
-            total_records,
-            total_pages,
-            state.current_page,
+            total_records: total_records.into(),
+            total_pages: total_pages.into(),
+            current_page: page,
         },
-        epoch,
-        rich_list: RichList{
+        epoch: tick_info.epoch,
+        rich_list: RichList {
             entities: selected_rich,
-        }
+        },
     };
     Ok(Json(rich_list_response))
 }

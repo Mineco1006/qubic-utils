@@ -19,7 +19,8 @@ async fn random_tx(db: Arc<Db>) -> TransactionResponseData {
     // wait until database has data
     let timeout_secs = 5; // timeout is 5s
     let start = Instant::now();
-    while db.iter().keys().next().is_none() {
+    let tx_tree = db.open_tree("transactions").unwrap();
+    while tx_tree.iter().keys().next().is_none() {
         if start.elapsed().as_secs() >= timeout_secs {
             panic!("Timed out waiting for database to have data!");
         }
@@ -27,13 +28,13 @@ async fn random_tx(db: Arc<Db>) -> TransactionResponseData {
     }
 
     let mut rng = rand::rng();
-    let key = db
+    let key = tx_tree
         .iter()
         .keys()
         .choose(&mut rng)
         .expect("Database is empty")
         .expect("Could not get data from database");
-    let value = db
+    let value = tx_tree
         .get(&key)
         .expect("Key not found in database")
         .expect("Could not get data from database");
@@ -62,7 +63,6 @@ pub async fn transaction() {
             .json()
             .await
             .expect("Failed to deserialize transaction");
-    dbg!(&response);
 
     let actual_tx: TransactionResponseData = response.transaction;
 
