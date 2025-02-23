@@ -6,7 +6,7 @@ use tokio::time::{sleep, Duration, Instant};
 extern crate qubic_rpc;
 use qubic_rpc::{
     archiver::WalletEntry,
-    qubic_rpc_types::{RichEntity, RichListResponse},
+    qubic_rpc_types::{RichEntity, RichListWrapper},
     spawn_server,
 };
 
@@ -40,7 +40,7 @@ pub async fn rich_list() {
     archiver_handle.abort_all();
 
     // Check if the server has the transaction cached
-    let response: RichListResponse =
+    let response: RichListWrapper =
         reqwest::get(format!("http://127.0.0.1:{port}/rich-list?page_size=10"))
             .await
             .expect("Failed to fetch rich list")

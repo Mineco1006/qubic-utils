@@ -14,11 +14,10 @@ use serde::{de, Deserialize, Deserializer};
 use crate::{
     archiver::{self, WalletEntry},
     qubic_rpc_types::{
-        APIStatus, Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload,
-        ComputorsResponse, LatestStats, LatestStatsResponse, LatestTick, Pagination, QubicRpcError,
-        RPCStatus, RequestSCPayload, RichList, RichListResponse, TickInfoResponse,
-        TickTransactions, TransactionResponse, TransactionsResponse, TransferResponse,
-        WalletBalance,
+        Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload, ComputorsWrapper,
+        LatestStats, LatestStatsWrapper, LatestTick, Pagination, QubicRpcError, RequestSCPayload,
+        RichList, RichListWrapper, TickInfo, TickInfoWrapper, TransactionResponse,
+        TransactionsResponse, WalletBalance,
     },
     RPCState,
 };
@@ -142,7 +141,9 @@ pub async fn transfers(
         return Err(anyhow!("tick range too big").into());
     }
 
-    let mut transfer_resp = TransferResponse::new();
+    let mut transfer_resp = TransactionsResponse {
+        transactions: Vec::new(),
+    };
 
     // TODO: support sc_only, desc
     for tick in start_tick..=end_tick {
@@ -153,37 +154,25 @@ pub async fn transfers(
             .await?
             .into_iter()
             .filter(|tx| tx.raw_transaction.to == id || tx.raw_transaction.from == id)
+            .map(|tx| tx.into())
             .collect::<Vec<_>>();
 
-        if tick_transactions.len() > 0 {
-            let tick_transactions = TickTransactions {
-                tick_number: tick,
-                identity: id.to_string(),
-                transactions: tick_transactions.into_iter().map(Into::into).collect(),
-            };
-            transfer_resp
-                .transfer_transactions_per_tick
-                .push(tick_transactions);
-        }
+        transfer_resp.transactions.extend(tick_transactions);
     }
     Ok(Json(transfer_resp))
 }
 /// Returns general health information about RPC server
 pub async fn health_check(
-    State(state): State<Arc<RPCState>>,
+    State(_state): State<Arc<RPCState>>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    Ok(Json(RPCStatus {
-        status: APIStatus::Ok,
-        uptime: state.start_time.elapsed().as_secs(),
-        version: "v2".to_string(),
-    }))
+    Ok(Json(""))
 }
 pub async fn computors(
     State(state): State<Arc<RPCState>>,
     Path(_epoch): Path<u32>, // ignore epoch for now, request_computors only returns for one epoch
 ) -> Result<impl IntoResponse, QubicRpcError> {
     let computors = state.client.qu().request_computors().await?;
-    Ok(Json(ComputorsResponse {
+    Ok(Json(ComputorsWrapper {
         computors: computors.into(),
     }))
 }
@@ -206,8 +195,8 @@ pub async fn query_sc(
 pub async fn tick_info(
     State(state): State<Arc<RPCState>>,
 ) -> Result<impl IntoResponse, QubicRpcError> {
-    let tick_info = state.client.qu().get_current_tick_info().await?;
-    Ok(Json(TickInfoResponse { tick_info }))
+    let tick_info: TickInfo = state.client.qu().get_current_tick_info().await?.into();
+    Ok(Json(TickInfoWrapper { tick_info }))
 }
 pub async fn block_height(
     State(state): State<Arc<RPCState>>,
@@ -251,7 +240,7 @@ pub async fn latest_stats(
         epoch_tick_quality: empty_ticks_in_current_epoch as f32 / ticks_in_current_epoch as f32,
         burned_qus: "".to_string(), // TODO
     };
-    Ok(Json(LatestStatsResponse { data }))
+    Ok(Json(LatestStatsWrapper { data }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -293,7 +282,7 @@ pub async fn rich_list(
         archiver::rich_list((page - 1) * page_size, page_size, state.db.clone()).await?;
 
     let tick_info = state.client.qu().get_current_tick_info().await?;
-    let rich_list_response = RichListResponse {
+    let rich_list_response = RichListWrapper {
         pagination: Pagination {
             total_records: total_records.into(),
             total_pages: total_pages.into(),
@@ -322,8 +311,6 @@ pub async fn tick_transactions(
             .into_iter()
             .map(Into::into)
             .collect(),
-        timestamp: 0.to_string(), // TODO: get timestamp
-        money_flew: false,        // TODO: get money_flew
     };
 
     Ok(Json(tick_txs))

@@ -34,6 +34,7 @@ bincode = "1.3.3"
 async-channel = "2.3.1"
 chrono = "0.4.39"
 num-bigint = "0.4.6"
+url = "2.5.4"
 
 [dev-dependencies]
 reqwest = { version= "*", features = ["rustls", "json"]}

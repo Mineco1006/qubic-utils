@@ -1,3 +1,4 @@
+///! Qubic RPC Server
 use std::sync::Arc;
 
 use clap::Parser;
