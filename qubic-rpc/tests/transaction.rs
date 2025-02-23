@@ -7,7 +7,7 @@ use tokio::time::{sleep, Duration, Instant};
 extern crate qubic_rpc;
 use qubic_rpc::{
     qubic_rpc_types::{TransactionResponse, TransactionResponseData},
-    spawn_server,
+    server::spawn_server,
 };
 use qubic_rs::qubic_tcp_types::types::transactions::TransactionWithData;
 

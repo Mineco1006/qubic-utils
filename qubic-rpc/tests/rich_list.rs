@@ -5,9 +5,8 @@ use tokio::time::{sleep, Duration, Instant};
 
 extern crate qubic_rpc;
 use qubic_rpc::{
-    archiver::WalletEntry,
     qubic_rpc_types::{RichEntity, RichListWrapper},
-    spawn_server,
+    server::{archiver::WalletEntry, spawn_server},
 };
 
 const COMPUTOR_ADDRESS: &str = "66.23.193.243:21841";

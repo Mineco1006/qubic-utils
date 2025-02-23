@@ -12,14 +12,16 @@ use num_bigint::BigUint;
 use serde::{de, Deserialize, Deserializer};
 
 use crate::{
-    archiver::{self, WalletEntry},
     qubic_rpc_types::{
         Balance, BlockHeight, BlockHeightResponse, BroadcastTransactionPayload, ComputorsWrapper,
         LatestStats, LatestStatsWrapper, LatestTick, Pagination, QubicRpcError, RequestSCPayload,
         RichList, RichListWrapper, TickInfo, TickInfoWrapper, TransactionResponse,
         TransactionsResponse, WalletBalance,
     },
-    RPCState,
+    server::{
+        archiver::{self, WalletEntry},
+        RPCState,
+    },
 };
 use qubic_rs::{
     qubic_tcp_types::types::transactions::{Transaction, TransactionFlags, TransactionWithData},
@@ -81,20 +83,6 @@ pub async fn transaction(
 /// Returns the same information as `/transactions/{tx_id}`
 pub async fn transaction_status(Path(id): Path<String>) -> impl IntoResponse {
     Redirect::permanent(&format!("/transactions/{id}"))
-}
-pub async fn transfer_transactions_per_tick(
-    OriginalUri(uri): OriginalUri,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    let query_params = uri
-        .path_and_query()
-        .and_then(|pq| pq.query())
-        .map(|q| format!("?{}", q))
-        .unwrap_or_default();
-
-    let redirect_url = format!("/identities/{id}/transfers{}", query_params);
-
-    Redirect::permanent(&redirect_url)
 }
 
 #[derive(Debug, Deserialize)]

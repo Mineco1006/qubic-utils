@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 
-use qubic_rpc::spawn_server;
+use qubic_rpc::server::spawn_server;
 
 #[derive(Debug, Parser)]
 pub struct Args {

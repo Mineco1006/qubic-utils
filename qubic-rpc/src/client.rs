@@ -502,6 +502,22 @@ impl RpcClient {
         Ok(rpc_response.rich_list.entities)
     }
 
+    /// Broadcast a transaction to the network
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use qubic_rpc::client::RpcClient;
+    /// use qubic_types::{traits::Sign, QubicWallet},
+    /// use qubic_tcp_types::types::transactions::TransactionWithData,
+    ///
+    /// let wallet =
+    ///     QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    ///         .unwrap();
+    /// let mut tx = TransactionWithData::default(); // create new transaction tx
+    /// let _ = tx.sign(&wallet); // sign transaction with wallet
+    /// rpc_client.broadcast_transaction(tx).await.unwrap();
+    /// ```
     pub async fn broadcast_transaction(&self, tx: TransactionWithData) -> Result<()> {
         let url = format!("{}/v1/broadcast-transaction", self.base_url);
         let mut payload = HashMap::new();
@@ -518,6 +534,26 @@ impl RpcClient {
             .await?;
         Ok(())
     }
+
+    /// Query a previously deployed smart contract
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use qubic_rpc::client::RpcClient;
+    /// use qubic_rpc::qubic_rpc_types::SmartContract;
+    ///
+    /// let contract_index = 1;
+    /// let input_type = 1;
+    /// let input_size = 0;
+    /// let request_data = "".to_string();
+    /// let sc: SmartContract = rpc_client
+    ///     .query_smart_contract(contract_index, input_type, input_size, request_data)
+    ///     .await
+    ///     .unwrap();
+    ///
+    /// println!("{:#?}", sc.response_data):
+    /// ```
     pub async fn query_smart_contract(
         &self,
         contract_index: u32,
@@ -774,7 +810,7 @@ mod tests {
         let input_type = 1;
         let input_size = 0;
         let request_data = "".to_string();
-        let sc: SmartContract = rpc_client
+        let _sc: SmartContract = rpc_client
             .query_smart_contract(contract_index, input_type, input_size, request_data)
             .await
             .unwrap();
@@ -782,5 +818,3 @@ mod tests {
         // endpoint is likely fine
     }
 }
-
-// .("/querySmartContract", post(s::query_sc))
