@@ -115,4 +115,133 @@ impl Header {
 }
 
 #[cfg(test)]
-mod tests {} // TODO
+mod tests {
+    use crate::qubic_tcp_types::{
+        types::{
+            assets::{RequestIssuedAsset, RequestOwnedAsset, RequestPossessedAsset},
+            contracts::{RequestContractFunction, ResponseContractFunction},
+            qlogging::RequestLog,
+            // special_commands::SpecialCommand,
+            ticks::{
+                CurrentTickInfo, GetCurrentTickInfo, QuorumTickData, RequestTickData, Tick,
+                TickData,
+            },
+            transactions::{RequestedTickTransactions, Transaction, TransactionWithData},
+            BroadcastMessage,
+            Computors,
+            ContractIpo,
+            ExchangePublicPeers,
+            RequestComputors,
+            RequestContractIpo,
+            RequestEntity,
+            RequestSystemInfo,
+            RespondedEntity,
+            SystemInfo,
+        },
+        utils::QubicRequest,
+        MessageType,
+    };
+
+    #[test]
+    fn message_types() {
+        assert_eq!(
+            GetCurrentTickInfo::get_message_type(),
+            MessageType::RequestCurrentTickInfo
+        );
+        assert_eq!(
+            CurrentTickInfo::get_message_type(),
+            MessageType::RespondCurrentTickInfo
+        );
+        assert_eq!(
+            RequestTickData::get_message_type(),
+            MessageType::RequestTickData
+        );
+        assert_eq!(
+            TickData::get_message_type(),
+            MessageType::BroadcastFutureTickData
+        );
+        assert_eq!(Tick::get_message_type(), MessageType::BroadcastTick);
+        assert_eq!(
+            QuorumTickData::get_message_type(),
+            MessageType::RequestQuorumTick
+        );
+        assert_eq!(
+            Transaction::get_message_type(),
+            MessageType::BroadcastTransaction
+        );
+        assert_eq!(
+            TransactionWithData::get_message_type(),
+            MessageType::BroadcastTransaction
+        );
+        assert_eq!(
+            RequestedTickTransactions::get_message_type(),
+            MessageType::RequestTickTransactions
+        );
+        assert_eq!(
+            RequestIssuedAsset::get_message_type(),
+            MessageType::RequestIssuedAsset
+        );
+        assert_eq!(
+            RequestOwnedAsset::get_message_type(),
+            MessageType::RequestOwnedAsset
+        );
+        assert_eq!(
+            RequestPossessedAsset::get_message_type(),
+            MessageType::RequestPossessedAsset
+        );
+        assert_eq!(RequestLog::get_message_type(), MessageType::RequestLog);
+        assert_eq!(
+            RequestContractFunction::get_message_type(),
+            MessageType::RequestContractFunction
+        );
+        assert_eq!(
+            ResponseContractFunction::get_message_type(),
+            MessageType::RespondContractFunction
+        );
+        // SpecialCommand needs associated type
+        // assert_eq!(
+        //     SpecialCommand::get_message_type(),
+        //     MessageType::ProcessSpecialCommand
+        // );
+        assert_eq!(
+            BroadcastMessage::get_message_type(),
+            MessageType::BroadcastMessage
+        );
+        assert_eq!(
+            RequestEntity::get_message_type(),
+            MessageType::RequestEntity
+        );
+        assert_eq!(
+            RespondedEntity::get_message_type(),
+            MessageType::RespondEntity
+        );
+        assert_eq!(
+            RequestComputors::get_message_type(),
+            MessageType::RequestComputors
+        );
+        assert_eq!(
+            Computors::get_message_type(),
+            MessageType::BroadcastComputors
+        );
+        assert_eq!(
+            RequestContractIpo::get_message_type(),
+            MessageType::RequestContractIPO
+        );
+        assert_eq!(
+            ContractIpo::get_message_type(),
+            MessageType::RespondContractIPO
+        );
+        assert_eq!(
+            ExchangePublicPeers::get_message_type(),
+            MessageType::ExchangePublicPeers
+        );
+        assert_eq!(
+            RequestSystemInfo::get_message_type(),
+            MessageType::RequestSystemInfo
+        );
+        assert_eq!(
+            SystemInfo::get_message_type(),
+            MessageType::RespondSystemInfo
+        );
+    }
+}

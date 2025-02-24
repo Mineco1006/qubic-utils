@@ -45,7 +45,7 @@ use crate::{
         Header, MessageType,
     },
     qubic_types::{
-        traits::{FromBytes, ToBytes},
+        traits::{FromBytes, Sign, ToBytes},
         QubicId, QubicTxHash, QubicWallet, Signature,
     },
 };
@@ -154,7 +154,7 @@ pub enum TransactionStatus {
 
 pub const NUMBER_OF_EXCHANGES_PEERS: usize = 4;
 
-#[cfg(not(any(feature = "async", feature = "http")))]
+// #[cfg(not(any(feature = "async", feature = "http")))]
 impl<'a, T> Qu<'a, T>
 where
     T: Transport,

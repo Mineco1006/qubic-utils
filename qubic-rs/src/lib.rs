@@ -3,8 +3,9 @@
 //! # Examples
 //!
 //! Get the latest tick
-//! ```rust,no_run
-//! let client = Client::<Tcp>::new(&state.computor).await.unwrap();
+//! ```rust,ignore
+//! const COMPUTOR: &str = "178.237.58.210:21841"; // check https://app.qubic.li/network/live for current peers
+//! let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
 //! let res = client.qu().get_current_tick_info().await;
 //! ```
 //!

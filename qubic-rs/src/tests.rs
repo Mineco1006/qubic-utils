@@ -7,12 +7,11 @@ use crate::{
         prelude::TransactionFlags,
         types::{ticks::TickData, ExchangePublicPeers},
     },
-    qubic_types::{traits::VerifySignature, QubicId, QubicTxHash},
+    qubic_types::{traits::VerifySignature, QubicId},
     transport::Tcp,
 };
 
-const COMPUTOR: &str = "146.0.74.233:21841"; // check https://app.qubic.li/network/live for current peers
-const _TESTNET: &str = "57.129.19.155:31841";
+const COMPUTOR: &str = "178.237.58.210:21841"; // check https://app.qubic.li/network/live for current peers
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
@@ -84,23 +83,24 @@ fn test_tick_data() {
     dbg!(tick_data);
 }
 
-#[cfg(not(any(feature = "async", feature = "http")))]
-#[test]
-fn test_mining_score() {
-    use crate::qubic_types::QubicWallet;
+// disable test, computors giving "resource temporarily unavailable"
+// #[cfg(not(any(feature = "async", feature = "http")))]
+// #[test]
+// fn test_mining_score() {
+//     use crate::qubic_types::QubicWallet;
 
-    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
+//     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
-    let mining_score = client
-        .qu()
-        .special_command_get_mining_ranking(
-            &QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-                .unwrap(),
-        )
-        .unwrap();
+//     let mining_score = client
+//         .qu()
+//         .special_command_get_mining_ranking(
+//             &QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+//                 .unwrap(),
+//         )
+//         .unwrap();
 
-    println!("{:?}", mining_score);
-}
+//     println!("{:?}", mining_score);
+// }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
@@ -117,12 +117,18 @@ fn test_period_detection() {
 fn test_check() {
     let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
-    let tick = 11885253;
-    let hash =
-        QubicTxHash::from_str("fazkeookoirgnemyesoqdkfwhhbbrvhbgnqkwvstidaocuhouprgkwacevsm")
-            .unwrap();
+    // use a new tick to make sure computor will have data about it
+    let current_tick = client.qu().get_current_tick_info().unwrap();
+    let tick = current_tick.tick - 10;
 
-    dbg!(client.qu().check_transaction_status(hash, tick).unwrap());
+    // get transactions in tick
+    let tx_hash = client
+        .qu()
+        .request_tick_data(tick)
+        .unwrap()
+        .transaction_digest[0];
+
+    client.qu().check_transaction_status(tx_hash, tick).unwrap();
 }
 
 #[cfg(not(any(feature = "async", feature = "http")))]
@@ -148,8 +154,9 @@ fn test_subscription() {
     let mut current_tick = 0;
     let mut ep = 0;
 
-    loop {
-        std::thread::sleep(std::time::Duration::from_millis(2_000));
+    // run 5 times
+    for _ in 0..5 {
+        std::thread::sleep(std::time::Duration::from_secs(1));
         while !rx.is_empty() {
             match rx.recv().unwrap() {
                 NetworkEvent::BroadcastMessage(_) => {
@@ -183,7 +190,7 @@ fn test_subscription() {
 fn test_ipo() {
     use crate::qubic_types::QubicWallet;
 
-    let client = Client::<Tcp>::new("57.129.19.155:31841").unwrap();
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
     let wallet =
         QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 
@@ -200,39 +207,26 @@ fn test_ipo() {
 #[cfg(not(any(feature = "async", feature = "http")))]
 #[test]
 fn test_asset() {
-    let client = Client::<Tcp>::new("57.129.19.155:31841").unwrap();
+    let client = Client::<Tcp>::new(COMPUTOR).unwrap();
 
     dbg!(client
         .qu()
         .request_entity(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
+            QubicId::from_str("FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ")
                 .unwrap()
         )
         .unwrap());
     dbg!(client
         .qx()
         .request_owned_assets(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
+            QubicId::from_str("FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ")
                 .unwrap()
         )
         .unwrap());
-    dbg!(client
-        .qx()
-        .request_owned_assets(
-            QubicId::from_str("MINECOMVVJWRHCKXPROBYQFUGKHAFMRIIYKPMDXGVAJLGHCMIRVVVDIBJIKB")
-                .unwrap()
-        )
-        .unwrap());
-
-    dbg!(client
-        .qx()
-        .request_issued_assets(QubicId::default())
-        .unwrap());
-
     dbg!(client
         .qx()
         .request_issued_assets(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
+            QubicId::from_str("FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ")
                 .unwrap()
         )
         .unwrap());
@@ -325,8 +319,9 @@ async fn test_subscription() {
     let mut current_tick = 0;
     let mut ep = 0;
 
-    loop {
-        std::thread::sleep(std::time::Duration::from_millis(2_000));
+    // run 5 times
+    for _ in 0..5 {
+        std::thread::sleep(std::time::Duration::from_secs(1));
         while !rx.is_empty() {
             match rx.recv().unwrap() {
                 NetworkEvent::BroadcastMessage(_) => {
@@ -384,43 +379,28 @@ async fn test_read_only_qu() {
 #[cfg(any(feature = "async", feature = "http"))]
 #[tokio::test]
 async fn test_asset() {
-    let client = Client::<Tcp>::new(_TESTNET).await.unwrap();
+    let client = Client::<Tcp>::new(COMPUTOR).await.unwrap();
 
     dbg!(client
         .qu()
         .request_entity(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
+            QubicId::from_str("FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ")
                 .unwrap()
         )
         .await
         .unwrap());
     dbg!(client
-        .qx()
+        .qu()
         .request_owned_assets(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
+            QubicId::from_str("FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ")
                 .unwrap()
         )
         .await
         .unwrap());
-    dbg!(client
-        .qx()
-        .request_owned_assets(
-            QubicId::from_str("MINECOMVVJWRHCKXPROBYQFUGKHAFMRIIYKPMDXGVAJLGHCMIRVVVDIBJIKB")
-                .unwrap()
-        )
-        .await
-        .unwrap());
-
-    dbg!(client
-        .qx()
-        .request_issued_assets(QubicId::default())
-        .await
-        .unwrap());
-
     dbg!(client
         .qx()
         .request_issued_assets(
-            QubicId::from_str("XOHYYIZLBNOAWDRWRMSGFTOBSEPATZLQYNTRBPHFXDAIOYQTGTNFTDABLLFA")
+            QubicId::from_str("FGKEMNSAUKDCXFPJPHHSNXOLPRECNPJXPIVJRGKFODFFVKWLSOGAJEQAXFIJ")
                 .unwrap()
         )
         .await

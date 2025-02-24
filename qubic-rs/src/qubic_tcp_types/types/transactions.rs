@@ -206,8 +206,9 @@ impl TransactionData {
 }
 
 /// ### Heap allocated Transaction with custom serializer/deserializer for the data field
-/// ```
-/// use crate::qubic_types::QubicWallet;
+/// ```rust
+/// use qubic_rs::qubic_types::{QubicWallet, traits::Sign};
+/// use qubic_rs::qubic_tcp_types::types::transactions::TransactionWithData;
 ///
 /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 /// let mut tx = TransactionWithData::default();

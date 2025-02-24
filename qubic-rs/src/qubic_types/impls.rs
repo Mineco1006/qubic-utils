@@ -226,8 +226,9 @@ impl QubicId {
 
     /// Verifies signature from message
     ///
-    /// ```
-    /// use qubic_rs::qubic_types::QubicId;
+    /// ```rust
+    /// use qubic_rs::qubic_types::{Signature, QubicId};
+    /// use std::str::FromStr;
     ///
     /// const SIGNATURE: Signature = Signature([0; 64]);
     ///
@@ -235,7 +236,7 @@ impl QubicId {
     ///
     /// let id = QubicId::from_str("BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
     ///
-    /// id.verify(message, SIGNATURE);
+    /// id.unwrap().verify(message, SIGNATURE);
     /// ```
     #[inline]
     pub fn verify<T: ToBytes>(&self, message: T, signature: Signature) -> bool {
@@ -250,8 +251,9 @@ impl QubicId {
 
     /// Verifies signature from digest
     ///
-    /// ```
-    /// use qubic_rs::qubic_types::QubicId;
+    /// ```rust
+    /// use qubic_rs::qubic_types::{QubicId, Signature};
+    /// use std::str::FromStr;
     ///
     /// const SIGNATURE: Signature = Signature([0; 64]);
     ///
@@ -259,7 +261,7 @@ impl QubicId {
     ///
     /// let id = QubicId::from_str("BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
     ///
-    /// id.verify_raw(digest, SIGNATURE);
+    /// id.unwrap().verify_raw(digest, SIGNATURE);
     /// ```
     #[inline]
     pub fn verify_raw(&self, message_digest: [u8; 32], signature: Signature) -> bool {
@@ -339,7 +341,7 @@ impl Display for QubicId {
 impl QubicWallet {
     /// Generates a wallet from the given input seed
     ///
-    /// ```
+    /// ```rust
     /// use qubic_rs::qubic_types::QubicWallet;
     /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
     /// ```
@@ -420,11 +422,11 @@ impl QubicWallet {
 
     /// Get the identity of the wallet
     ///
-    /// ```
+    /// ```rust
     /// use qubic_rs::qubic_types::QubicWallet;
     /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
     ///
-    /// assert_eq(wallet.get_identity(), "BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
+    /// assert_eq!(wallet.get_identity(), "BZBQFLLBNCXEMGLOBHUVFTLUPLVCPQUASSILFABOFFBCADQSSUPNWLZBQEXK");
     /// ```
     #[inline(always)]
     pub fn get_identity(&self) -> String {
@@ -477,7 +479,7 @@ impl QubicWallet {
 
     /// SchnorrQ signature generation from message
     ///
-    /// ```
+    /// ```rust
     /// use qubic_rs::qubic_types::QubicWallet;
     /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
     ///
@@ -497,7 +499,7 @@ impl QubicWallet {
 
     /// SchnorrQ signature generation from message digest
     ///
-    /// ```
+    /// ```rust
     /// use qubic_rs::qubic_types::QubicWallet;
     /// let wallet = QubicWallet::from_seed("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
     ///
