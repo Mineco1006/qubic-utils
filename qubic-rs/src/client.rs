@@ -12,40 +12,43 @@ use std::{
     thread::JoinHandle,
 };
 
-#[allow(unused_imports)]
-use crate::qubic_tcp_types::{
-    events::NetworkEvent,
-    types::{
-        assets::{
-            AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset,
-            RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset, RespondPossessedAsset,
-            TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE, QXID, TRANSFER_FEE,
-        },
-        contracts::RequestContractFunction,
-        qlogging::{QubicLog, RequestLog},
-        send_to_many::{
-            SendToManyFeeOutput, SendToManyInput, SendToManyTransaction,
-            SEND_TO_MANY_CONTRACT_INDEX,
-        },
-        special_commands::{GetMiningScoreRanking, MiningScoreRanking, SpecialCommand},
-        BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet,
-        RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo, RespondedEntity,
-        SystemInfo,
-    },
-    Header, MessageType,
-};
-use crate::qubic_tcp_types::{prelude::*, types::contracts::ResponseContractFunction};
-use crate::qubic_types::{
-    traits::{FromBytes, Sign, ToBytes},
-    QubicId, QubicTxHash, QubicWallet, Signature,
-};
-use crate::transport::Transport;
 use anyhow::Result;
 use kangarootwelve::KangarooTwelve;
 use rand::Rng;
-
 #[cfg(any(feature = "async", feature = "http"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+use crate::transport::Transport;
+#[allow(unused_imports)]
+use crate::{
+    qubic_tcp_types::{
+        events::NetworkEvent,
+        prelude::*,
+        types::{
+            assets::{
+                AssetName, IssueAssetInput, RequestIssuedAsset, RequestOwnedAsset,
+                RequestPossessedAsset, RespondIssuedAsset, RespondOwnedAsset,
+                RespondPossessedAsset, TransferAssetOwnershipAndPossessionInput, ISSUE_ASSET_FEE,
+                QXID, TRANSFER_FEE,
+            },
+            contracts::{RequestContractFunction, ResponseContractFunction},
+            qlogging::{QubicLog, RequestLog},
+            send_to_many::{
+                SendToManyFeeOutput, SendToManyInput, SendToManyTransaction,
+                SEND_TO_MANY_CONTRACT_INDEX,
+            },
+            special_commands::{GetMiningScoreRanking, MiningScoreRanking, SpecialCommand},
+            BroadcastMessage, Computors, ContractIpo, ContractIpoBid, ExchangePublicPeers, Packet,
+            RequestComputors, RequestContractIpo, RequestEntity, RequestSystemInfo,
+            RespondedEntity, SystemInfo,
+        },
+        Header, MessageType,
+    },
+    qubic_types::{
+        traits::{FromBytes, ToBytes},
+        QubicId, QubicTxHash, QubicWallet, Signature,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct ClientBuilder<T: Transport> {
@@ -708,9 +711,13 @@ where
         Ok(())
     }
 
-    pub async fn send_signed_transaction(&self, transaction: Transaction) -> Result<()> {
+    pub async fn send_signed_transaction<Tx: Into<TransactionWithData>>(
+        &self,
+        transaction: Tx,
+    ) -> Result<()> {
+        let tx: TransactionWithData = transaction.into();
         self.transport
-            .send_without_response(Packet::new(transaction, false))
+            .send_without_response(Packet::new(tx, false))
             .await?;
         Ok(())
     }

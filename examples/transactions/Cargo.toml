@@ -1,5 +1,5 @@
 [package]
-name = "example-tick"
+name = "example-transactions"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -9,5 +9,5 @@ qubic-rs = { path = "../../qubic-rs", features = ["async"] }
 tokio = "1.43.0"
 
 [[bin]]
-name = "tick"
+name = "transactions"
 path = "main.rs"

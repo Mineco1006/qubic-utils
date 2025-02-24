@@ -80,19 +80,15 @@ impl Transport for Tcp {
     async fn new(url: String, timeout: Option<Duration>) -> Result<Box<Self>, Self::Err> {
         Ok(Box::new(Self {
             url,
-            timeout: if let Some(timeout) = timeout {
-                timeout
-            } else {
-                std::time::Duration::from_secs(5)
-            },
+            timeout: timeout.unwrap_or(std::time::Duration::from_secs(5)),
         }))
     }
 
     async fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
         let std_stream = std::net::TcpStream::connect(&self.url)?;
 
-        std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        std_stream.set_read_timeout(Some(self.timeout))?;
+        std_stream.set_write_timeout(Some(self.timeout))?;
 
         let mut stream = TcpStream::from_std(std_stream)?;
 
@@ -107,8 +103,8 @@ impl Transport for Tcp {
     ) -> Result<T> {
         let std_stream = std::net::TcpStream::connect(&self.url)?;
 
-        std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        std_stream.set_read_timeout(Some(self.timeout))?;
+        std_stream.set_write_timeout(Some(self.timeout))?;
 
         let mut stream = TcpStream::from_std(std_stream)?;
 
@@ -150,8 +146,8 @@ impl Transport for Tcp {
 
         let std_stream = std::net::TcpStream::connect(&self.url)?;
 
-        std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        std_stream.set_read_timeout(Some(self.timeout))?;
+        std_stream.set_write_timeout(Some(self.timeout))?;
 
         let mut stream = TcpStream::from_std(std_stream)?;
 
@@ -198,11 +194,7 @@ impl Transport for Tcp {
     fn new(url: String, timeout: Option<Duration>) -> Result<Box<Self>, Self::Err> {
         Ok(Box::new(Self {
             url,
-            timeout: if let Some(timeout) = timeout {
-                timeout
-            } else {
-                std::time::Duration::from_secs(5)
-            },
+            timeout: timeout.unwrap_or(std::time::Duration::from_secs(5)),
         }))
     }
 
@@ -311,11 +303,7 @@ impl Transport for ConnectedTcp {
 
     fn new(url: String, timeout: Option<std::time::Duration>) -> Result<Box<Self>, Self::Err> {
         let stream = TcpStream::connect(&url)?;
-        let timeout = if let Some(timeout) = timeout {
-            timeout
-        } else {
-            Duration::from_secs(5)
-        };
+        let timeout = timeout.unwrap_or(Duration::from_secs(5));
 
         stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(timeout))?;
@@ -457,14 +445,10 @@ impl Transport for ConnectedTcp {
         timeout: Option<std::time::Duration>,
     ) -> Result<Box<Self>, Self::Err> {
         let std_stream = std::net::TcpStream::connect(url.clone())?;
-        let timeout = if let Some(timeout) = timeout {
-            timeout
-        } else {
-            Duration::from_secs(5)
-        };
+        let timeout = timeout.unwrap_or(Duration::from_secs(5));
 
-        std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        std_stream.set_read_timeout(Some(timeout))?;
+        std_stream.set_write_timeout(Some(timeout))?;
         let stream = TcpStream::from_std(std_stream)?;
         Ok(Box::new(Self {
             stream: RefCell::new(stream),
@@ -476,8 +460,8 @@ impl Transport for ConnectedTcp {
     async fn send_without_response(&self, data: impl ToBytes) -> Result<()> {
         if let Err(e) = self.stream.borrow_mut().write_all(&data.to_bytes()).await {
             let std_stream = std::net::TcpStream::connect(self.get_url().await)?;
-            std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-            std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+            std_stream.set_read_timeout(Some(self.timeout))?;
+            std_stream.set_write_timeout(Some(self.timeout))?;
             *self.stream.borrow_mut() = TcpStream::from_std(std_stream)?;
 
             return Err(e.into());
@@ -536,8 +520,8 @@ impl Transport for ConnectedTcp {
             Ok(r) => Ok(r),
             Err(e) => {
                 let std_stream = std::net::TcpStream::connect(self.get_url().await)?;
-                std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-                std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+                std_stream.set_read_timeout(Some(self.timeout))?;
+                std_stream.set_write_timeout(Some(self.timeout))?;
                 *self.stream.borrow_mut() = TcpStream::from_std(std_stream)?;
 
                 Err(e.into())
@@ -582,8 +566,8 @@ impl Transport for ConnectedTcp {
             Ok(r) => Ok(r),
             Err(e) => {
                 let std_stream = std::net::TcpStream::connect(self.get_url().await)?;
-                std_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-                std_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+                std_stream.set_read_timeout(Some(self.timeout))?;
+                std_stream.set_write_timeout(Some(self.timeout))?;
                 *self.stream.borrow_mut() = TcpStream::from_std(std_stream)?;
 
                 Err(e)
