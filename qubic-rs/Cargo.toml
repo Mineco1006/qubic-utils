@@ -1,0 +1,35 @@
+[package]
+name = "qubic-rs"
+version = "0.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = { version = "*", default-features = false, optional = true}
+kangarootwelve = "0.1.2"
+tokio = { version = "*", features = ["full"]}
+socket2 = "*"
+anyhow = "*"
+serde = { version = "*", features = ["derive"]}
+async-trait = "*"
+thiserror-no-std = { version = "*" }
+thiserror = { version = "*", optional = true }
+four-q = { path = "../four-q-rs" }
+tiny-keccak = { version = "2.0", default-features = false, features = ["k12"]}
+ethereum-types = { version = "0.14.1", default-features = false}
+hex = { version = "*", default-features = false, features = ["serde"]}
+getrandom = { version = "*", features = ["js"], optional = true}
+base64 = "0.22.1"
+
+[dev-dependencies]
+crossbeam-channel = "*"
+hex = "*"
+
+[features]
+default = ["serde", "std"]
+serde = []
+std = ["serde/default", "hex/default", "ethereum-types/default", "dep:thiserror", "rand/default", "dep:rand"]
+wasm = ["dep:getrandom"]
+http = []
+async = ["http"]

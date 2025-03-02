@@ -15,3 +15,7 @@ Cargo.lock
 qubic-spectrum/spectrum/*
 
 cargo-nono
+
+# Ignore database stuff
+test-archiver-db/
+archiver-db/

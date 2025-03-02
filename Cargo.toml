@@ -1,13 +1,10 @@
 [workspace]
 members = [
     "four-q-rs",
-    "qubic-web3-rs",
-    "qubic-types",
-    "qubic-tcp-types",
-    "qubic-rpc-types",
+    "qubic-rs",
     "qubic-rpc",
     "vanity-id-generator",
-    "qubic-spectrum"
+    "examples/*"
 ]
 resolver = "2"
 
