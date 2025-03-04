@@ -24,4 +24,4 @@ cargo test server # only test RPC server
 **Important:** If most of the server tests are hanging, it is very likely that the computer being used is offline, please go to the [network explorer](https://app.qubic.li/) to find another peer and copy its IP address into the `mod tests` of `qubic-rpc/src/lib.rs`. Likewise, if many of the client tests are failing, check to see if `rpc.qubic.org` is working properly.
 
 ## qubic-rs
-Refer to the [example directory][examples] for common usage examples of `qubic-rs`.
+Refer to the [example directory](examples) for common usage examples of `qubic-rs`.
