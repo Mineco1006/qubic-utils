@@ -1,0 +1,19 @@
+[package]
+name = "qubic-tcp-types"
+version = "0.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+getrandom = { version = "*", features = ["js"], optional = true}
+serde = { version = "*", default-features = false, features = ["derive"] }
+rand = { version = "*", default-features = false, optional = true}
+qubic-types = { path= "../qubic-types", default-features = false }
+tiny-keccak = { version = "2.0", default-features = false, features = ["k12"]}
+
+[features]
+default = ["serde", "std"]
+serde = ["qubic-types/serde"]
+wasm = ["dep:getrandom"]
+std = ["rand/default", "dep:rand", "qubic-types/default"]
