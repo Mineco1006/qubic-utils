@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use std::str::FromStr;
 
 use qubic_tcp_types::{prelude::TransactionFlags, types::{ExchangePublicPeers, ticks::TickData}, events::NetworkEvent};

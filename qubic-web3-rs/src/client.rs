@@ -90,13 +90,13 @@ impl<T> Client<T> where T: Transport {
         })
     }
 
-    pub fn qu(&self) -> Qu<T> {
+    pub fn qu(&self) -> Qu<'_, T> {
         Qu {
             transport: &self.transport
         }
     }
 
-    pub fn qx(&self) -> Qx<T> {
+    pub fn qx(&self) -> Qx<'_, T> {
         Qx {
             transport: &self.transport
         }
@@ -542,24 +542,24 @@ impl<'a, T: Transport> Qx<'a, T> {
 
 #[cfg(any(feature = "async", feature = "http"))]
 impl<'a, T> Qu<'a, T> where T: Transport {
-    pub async fn send_raw_transaction(&self, wallet: &QubicWallet, raw_transaction: RawTransaction) -> Result<()> {
-        
-        let transaction = Transaction {
-            raw_transaction,
-            signature: wallet.sign(raw_transaction)
-        };
+    pub async fn send_raw_transaction<Tx: Into<TransactionWithData>>(&self, wallet: &QubicWallet, raw_transaction: Tx) -> Result<QubicTxHash> {
+        let mut txwd: TransactionWithData = raw_transaction.into();
+        txwd.sign(wallet)?;
+        let hash = txwd.clone().into();
 
-        self.transport.send_without_response(Packet::new(transaction, false)).await?;
-        Ok(())
+        self.transport.send_without_response(Packet::new(txwd, false)).await?;
+        Ok(hash)
     }
 
-    pub async fn send_signed_transaction(&self, transaction: Transaction) -> Result<()> {
-        self.transport.send_without_response(Packet::new(transaction, false)).await?;
-        Ok(())
+    pub async fn send_signed_transaction<Tx: Into<TransactionWithData>>(&self, transaction: Tx) -> Result<QubicTxHash> {
+        let txwd: TransactionWithData = transaction.into();
+        let hash: QubicTxHash = txwd.clone().into();
+        self.transport.send_without_response(Packet::new(txwd, false)).await?;
+        Ok(hash)
     }
 
     pub async fn submit_work(&self, wallet: &QubicWallet, solution: WorkSolution) -> Result<()> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut message: BroadcastMessage = solution.into();
         let mut shared_key_and_gamming_nonce = [0u64; 8];
         let mut gamming_key: [u64; 4];
@@ -579,7 +579,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
         loop {
             unsafe {
-                message.gamming_nonce.0 = rng.gen();
+                message.gamming_nonce.0 = rng.random();
                 copy_nonoverlapping(message.gamming_nonce.0.as_ptr(), shared_key_and_gamming_nonce.as_mut_ptr().add(4) as *mut u8, 32);
                 let mut kg = KangarooTwelve::hash(&shared_key_and_gamming_nonce.iter().map(|i| i.to_le_bytes()).collect::<Vec<_>>().into_iter().flatten().collect::<Vec<_>>(), &[]);
                 let mut gk = [0; 32];
@@ -643,7 +643,7 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         self.transport.send_with_response(packet).await
     }
 
-    pub async fn request_tick_data(&self, tick: u32) -> Result<Tick> {
+    pub async fn request_tick_data(&self, tick: u32) -> Result<TickData> {
         let packet = Packet::new(RequestTickData { tick }, true);
     
         self.transport.send_with_response(packet).await
@@ -652,6 +652,12 @@ impl<'a, T> Qu<'a, T> where T: Transport {
     pub async fn request_quorum_tick(&self, tick: u32, vote_flags: [u8; (676 + 7) / 8]) -> Result<Tick> {
         let packet = Packet::new(QuorumTickData { tick, vote_flags }, true);
         
+        self.transport.send_with_response(packet).await
+    }
+
+    pub async fn request_system_info(&self) -> Result<SystemInfo> {
+        let packet = Packet::new(RequestSystemInfo, true);
+
         self.transport.send_with_response(packet).await
     }
 
@@ -665,6 +671,32 @@ impl<'a, T> Qu<'a, T> where T: Transport {
         let packet = Packet::new(RequestedTickTransactions { tick, flags }, true);
 
         self.transport.send_with_multiple_responses(packet).await
+    }
+
+    pub async fn check_transaction_status(&self, tx_hash: QubicTxHash, tick: u32) -> Result<TransactionStatus> {
+        let mut status = TransactionStatus::Failed;
+
+        let tt_packet = Packet::new(RequestedTickTransactions { tick, flags: TransactionFlags::all() }, true);
+        let tt: Vec<TransactionWithData> = self.transport.send_with_multiple_responses(tt_packet).await?;
+
+        for tx in tt {
+            let digest: QubicTxHash = tx.into();
+            if digest == tx_hash {
+                status = TransactionStatus::Included;
+                break;
+            }
+        }
+
+        let td = self.request_tick_data(tick).await?;
+
+        for executed_tx_hash in td.transaction_digest {
+            if executed_tx_hash == tx_hash {
+                status = TransactionStatus::Executed;
+                break;
+            }
+        }
+        
+        Ok(status)
     }
 
     pub async fn subscribe<F>(&self, public_peers: ExchangePublicPeers, event_handler: F) -> Result<()> 
@@ -754,6 +786,53 @@ impl<'a, T> Qu<'a, T> where T: Transport {
 
         self.transport.send_without_response(packet).await?;
         Ok(call.into())
+    }
+
+    pub async fn request_log(&self, passcode: [u64; 4]) -> Result<QubicLog> {
+        let packet = Packet::new(RequestLog { passcode }, true);
+
+        self.transport.send_with_response(packet).await
+    }
+
+    pub async fn get_send_to_many_fees(&self) -> Result<SendToManyFeeOutput> {
+        let packet = Packet::new(RequestContractFunction {
+            contract_index: SEND_TO_MANY_CONTRACT_INDEX,
+            input_type: 1,
+            input_size: 0
+        }, true);
+
+        self.transport.send_with_response(packet).await
+    }
+
+    /// panics if txns.len() > 25
+    pub async fn send_to_many(&self, wallet: &QubicWallet, txns: &[SendToManyTransaction], tick: u32) -> Result<QubicTxHash> {
+        let mut input = SendToManyInput::default();
+        for (idx, tx) in txns.into_iter().enumerate() {
+            input.ids[idx] = tx.id;
+            input.amounts[idx] = tx.amount;
+        }
+
+        let fee = self.get_send_to_many_fees().await?;
+
+        let tx = TransactionBuilder::new()
+                                        .with_amount(fee.fee as u64)
+                                        .with_signing_wallet(wallet)
+                                        .with_tick(tick)
+                                        .with_tx_data(TransactionData::SendToMany(input))
+                                        .build();
+        
+        let hash = QubicTxHash::from(tx.clone());
+
+        let packet = Packet::new(tx, false);
+
+        self.transport.send_without_response(packet).await?;
+        Ok(hash)
+    }
+
+    pub async fn special_command_get_mining_ranking(&self, operator: &QubicWallet) -> Result<MiningScoreRanking> {
+        let packet = Packet::new(SpecialCommand::new(GetMiningScoreRanking, operator), true);
+        
+        self.transport.send_with_response(packet).await
     }
 }
 

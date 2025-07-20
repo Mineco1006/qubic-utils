@@ -102,8 +102,8 @@ impl Header {
     }
 
     pub fn randomize_dejavu(&mut self) {
-        let mut rng = rand::thread_rng();
-        self.dejavu = rng.gen();
+        let mut rng = rand::rng();
+        self.dejavu = rng.random();
     }
 
     pub fn set_type(&mut self, new_type: MessageType) {
